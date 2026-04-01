@@ -12,7 +12,7 @@ export function ModuleNode({ data }: NodeProps<Node<ModuleNodeData>>) {
     <div className={`node node-module ${data.expanded ? 'expanded' : ''}`}>
       <Handle type="target" position={Position.Top} />
       <div className="node-header" onDoubleClick={data.onToggle}>
-        <span className="node-icon">{data.expanded ? '\u25BC' : '\u25B6'}</span>
+        <span className="node-icon" onClick={(e) => { e.stopPropagation(); data.onToggle(); }}>{data.expanded ? '\u25BC' : '\u25B6'}</span>
         <span className="node-label">{data.label}</span>
         <span className="node-count">{data.childCount}</span>
       </div>

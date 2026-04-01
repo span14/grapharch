@@ -10,6 +10,49 @@
 
 **Design doc:** `docs/plans/2026-04-01-phase1-static-graph-viewer-design.md`
 
+### Verification Policy
+
+Every task that produces UI-visible changes **must** include a Playwright Electron snapshot as proof of correctness before committing. This replaces "run and eyeball it" with automated evidence.
+
+**How it works:**
+
+1. Install `playwright` as a dev dependency (one-time setup in Task 1).
+2. At each verification step, write a short script (or use an existing one) that:
+   - Launches the Electron app via `_electron.launch()`
+   - Waits for the first window
+   - Takes a screenshot (`page.screenshot()`)
+   - Optionally asserts on page content (`page.locator()`, `page.title()`, etc.)
+   - Saves the screenshot to `test/snapshots/<task>-<description>.png`
+   - Closes the app
+3. The screenshot serves as a record that the step was completed and the UI rendered correctly.
+
+**Example:**
+```ts
+import { _electron as electron } from 'playwright';
+import path from 'node:path';
+
+const app = await electron.launch({
+  args: [path.join(__dirname, '../../.vite/build/index.js')],
+});
+const page = await app.firstWindow();
+await page.waitForLoadState('domcontentloaded');
+await page.screenshot({ path: 'test/snapshots/task1-welcome.png' });
+await app.close();
+```
+
+**When to snapshot:**
+- Any step that says "Verify", "Expected: Window...", or "Visual verification"
+- Before every commit that touches renderer code
+- After opening a project to prove the graph rendered
+
+**Note:** Native OS dialogs (`dialog.showOpenDialog`) cannot be automated by Playwright. For tasks that require opening a project folder, use `electronApp.evaluate()` to send the IPC message directly instead:
+```ts
+await app.evaluate(({ BrowserWindow }) => {
+  const win = BrowserWindow.getAllWindows()[0];
+  win.webContents.send('project:open', { rootDir: '/path/to/test/project' });
+});
+```
+
 ---
 
 ## Task 1: Scaffold Electron Forge Project
@@ -66,16 +109,36 @@ Create `src/renderer/App.tsx` with a placeholder React component.
 Update `src/renderer/index.html` to load the React entry.
 Update `forge.config.ts` entry paths to match new structure.
 
-**Step 5: Verify the app launches**
+**Step 5: Install Playwright**
 
-Run:
 ```bash
-npm start
+npm install -D playwright
+mkdir -p test/snapshots
 ```
 
-Expected: Electron window opens showing a placeholder React page.
+**Step 6: Verify the app launches (with snapshot)**
 
-**Step 6: Commit**
+Build the app, then take a Playwright snapshot:
+```bash
+npx electron-forge build
+```
+
+```ts
+// test/e2e/verify-launch.ts
+import { _electron as electron } from 'playwright';
+import path from 'node:path';
+
+const app = await electron.launch({ args: ['.'] });
+const page = await app.firstWindow();
+await page.waitForLoadState('domcontentloaded');
+await page.screenshot({ path: 'test/snapshots/task1-welcome.png' });
+console.log('Title:', await page.title());
+await app.close();
+```
+
+Expected: Screenshot shows the placeholder React page. Title is "GraphArc".
+
+**Step 7: Commit**
 
 ```bash
 git init
@@ -1257,10 +1320,20 @@ Add the worker entry to the Vite plugin's `build` array:
 }
 ```
 
-**Step 4: Verify it builds**
+**Step 4: Verify it builds (with snapshot)**
 
-Run: `npm run build` (or `npx electron-forge build`)
+Run: `npx electron-forge build`
 Expected: Builds without errors.
+
+Take a Playwright snapshot to confirm the worker starts:
+```ts
+const app = await electron.launch({ args: ['.'] });
+const page = await app.firstWindow();
+await page.waitForLoadState('domcontentloaded');
+// Worker should have posted worker:ready by now
+await page.screenshot({ path: 'test/snapshots/task7-worker-ready.png' });
+await app.close();
+```
 
 **Step 5: Commit**
 
@@ -1464,10 +1537,23 @@ declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined
 declare const MAIN_WINDOW_VITE_NAME: string
 ```
 
-**Step 5: Verify the app still launches**
+**Step 5: Verify the app still launches (with snapshot)**
 
-Run: `npm start`
-Expected: Window opens without errors.
+Build and take a Playwright snapshot:
+```ts
+const app = await electron.launch({ args: ['.'] });
+const page = await app.firstWindow();
+await page.waitForLoadState('domcontentloaded');
+await page.screenshot({ path: 'test/snapshots/task8-ipc-ready.png' });
+// Verify no console errors
+const consoleLogs: string[] = [];
+page.on('console', msg => consoleLogs.push(msg.text()));
+await page.waitForTimeout(2000);
+console.log('Console errors:', consoleLogs.filter(l => l.includes('Error')));
+await app.close();
+```
+
+Expected: Screenshot shows welcome screen. No critical console errors.
 
 **Step 6: Commit**
 
@@ -2178,10 +2264,33 @@ export function App() {
 }
 ```
 
-**Step 9: Verify the app renders**
+**Step 9: Verify the app renders (with snapshots)**
 
-Run: `npm start`
-Expected: Welcome screen shows. Click "Open Project Folder", select `predex-pairing/src`, and the graph renders.
+Build and take Playwright snapshots for both states:
+
+```ts
+const app = await electron.launch({ args: ['.'] });
+const page = await app.firstWindow();
+await page.waitForLoadState('domcontentloaded');
+
+// 1. Welcome screen
+await page.screenshot({ path: 'test/snapshots/task9-welcome.png' });
+
+// 2. Open a project via IPC (bypasses native dialog)
+await app.evaluate(({ BrowserWindow }) => {
+  const win = BrowserWindow.getAllWindows()[0];
+  // Trigger the worker to parse the test fixtures
+  win.webContents.send('project:open', '/Users/ggattacker/Documents/predex/predex-pairing/src');
+});
+
+// Wait for graph to render
+await page.waitForSelector('.react-flow__node', { timeout: 15000 });
+await page.screenshot({ path: 'test/snapshots/task9-graph-rendered.png' });
+
+await app.close();
+```
+
+Expected: First screenshot shows welcome screen with "Open Project Folder" button. Second screenshot shows the React Flow canvas with graph nodes.
 
 **Step 10: Commit**
 
@@ -2359,9 +2468,31 @@ return (
 )
 ```
 
-**Step 4: Verify**
+**Step 4: Verify (with snapshot)**
 
-Run: `npm start`, open a project, click a node → detail panel appears on the right.
+Build and take a Playwright snapshot with a node selected:
+
+```ts
+const app = await electron.launch({ args: ['.'] });
+const page = await app.firstWindow();
+await page.waitForLoadState('domcontentloaded');
+
+// Open project via IPC
+await app.evaluate(({ BrowserWindow }) => {
+  const win = BrowserWindow.getAllWindows()[0];
+  win.webContents.send('project:open', '/Users/ggattacker/Documents/predex/predex-pairing/src');
+});
+
+// Wait for graph, then click a node
+await page.waitForSelector('.react-flow__node', { timeout: 15000 });
+await page.click('.react-flow__node >> nth=0');
+await page.waitForSelector('.detail-panel');
+await page.screenshot({ path: 'test/snapshots/task10-detail-panel.png' });
+
+await app.close();
+```
+
+Expected: Screenshot shows the graph with a detail panel visible on the right showing node info and edges.
 
 **Step 5: Commit**
 
@@ -2531,7 +2662,37 @@ Add to `styles.css`:
 
 In `graphToFlow()`, filter edges by `visibleEdgeKinds` and nodes by `searchQuery`. Wire these from the store.
 
-**Step 6: Commit**
+**Step 6: Verify (with snapshot)**
+
+Take snapshots showing the filter bar and filtered state:
+
+```ts
+const app = await electron.launch({ args: ['.'] });
+const page = await app.firstWindow();
+await page.waitForLoadState('domcontentloaded');
+
+// Open project via IPC
+await app.evaluate(({ BrowserWindow }) => {
+  const win = BrowserWindow.getAllWindows()[0];
+  win.webContents.send('project:open', '/Users/ggattacker/Documents/predex/predex-pairing/src');
+});
+
+await page.waitForSelector('.react-flow__node', { timeout: 15000 });
+
+// Full graph with filter bar visible
+await page.screenshot({ path: 'test/snapshots/task11-filter-bar.png' });
+
+// Type a search query to filter nodes
+await page.fill('.search-input', 'model');
+await page.waitForTimeout(500);
+await page.screenshot({ path: 'test/snapshots/task11-filtered.png' });
+
+await app.close();
+```
+
+Expected: First screenshot shows graph with filter bar at top. Second screenshot shows filtered nodes matching "model".
+
+**Step 7: Commit**
 
 ```bash
 git add src/renderer/
@@ -2589,9 +2750,39 @@ export function stopWatching(): void {
 
 Update `src/worker/index.ts` to start watching after initial parse and send diffs on file change. On change, re-parse the changed file, recompute affected edges, and send a `graph:diff`.
 
-**Step 3: Verify**
+**Step 3: Verify (with snapshots)**
 
-Run: `npm start`, open a project, edit a `.py` file in an editor → graph updates automatically.
+Take before/after snapshots to prove live updates work:
+
+```ts
+import fs from 'node:fs';
+
+const app = await electron.launch({ args: ['.'] });
+const page = await app.firstWindow();
+await page.waitForLoadState('domcontentloaded');
+
+// Open a project with a test fixture
+const testDir = '/tmp/grapharc-watcher-test';
+fs.mkdirSync(testDir, { recursive: true });
+fs.writeFileSync(`${testDir}/main.py`, 'def hello():\n    pass\n');
+
+await app.evaluate(({ BrowserWindow }, dir) => {
+  const win = BrowserWindow.getAllWindows()[0];
+  win.webContents.send('project:open', dir);
+}, testDir);
+
+await page.waitForSelector('.react-flow__node', { timeout: 15000 });
+await page.screenshot({ path: 'test/snapshots/task12-before-edit.png' });
+
+// Edit the file — watcher should trigger a re-parse
+fs.writeFileSync(`${testDir}/main.py`, 'def hello():\n    pass\n\ndef world():\n    pass\n');
+await page.waitForTimeout(3000); // wait for watcher + re-parse
+await page.screenshot({ path: 'test/snapshots/task12-after-edit.png' });
+
+await app.close();
+```
+
+Expected: Second screenshot shows an additional `world` function node that wasn't in the first.
 
 **Step 4: Commit**
 
@@ -2666,7 +2857,30 @@ export async function writeLayoutOverrides(
 
 Update `src/worker/index.ts`: on `project:open`, check cache first. If cache exists, send immediately, then re-parse in background and send diff if anything changed.
 
-**Step 3: Commit**
+**Step 3: Verify (with snapshot)**
+
+Take a snapshot to confirm the graph loads (from cache on second open):
+
+```ts
+const app = await electron.launch({ args: ['.'] });
+const page = await app.firstWindow();
+await page.waitForLoadState('domcontentloaded');
+
+// Open project — first time builds cache, graph should render
+await app.evaluate(({ BrowserWindow }) => {
+  const win = BrowserWindow.getAllWindows()[0];
+  win.webContents.send('project:open', '/Users/ggattacker/Documents/predex/predex-pairing/src');
+});
+
+await page.waitForSelector('.react-flow__node', { timeout: 15000 });
+await page.screenshot({ path: 'test/snapshots/task13-cached-load.png' });
+
+await app.close();
+```
+
+Expected: Screenshot shows the graph rendered. On a second launch, the graph should appear near-instantly from cache.
+
+**Step 4: Commit**
 
 ```bash
 git add src/worker/cache.ts src/worker/index.ts
@@ -2751,19 +2965,19 @@ git commit -m "test: add end-to-end smoke test for graph building"
 
 | Task | What it builds | Test coverage |
 |------|---------------|---------------|
-| 1 | Electron Forge scaffold | App launches |
+| 1 | Electron Forge scaffold | Playwright snapshot: welcome screen |
 | 2 | Shared types & IPC channels | Type safety |
 | 3 | File discovery | 2 unit tests |
 | 4 | tree-sitter symbol extraction | 4 unit tests |
 | 5 | Import + call edge resolution | 2 unit tests |
 | 6 | Graph assembly + rollups | 1 integration test |
-| 7 | Worker process entry | Builds |
-| 8 | Main process IPC + menu | App launches with IPC |
-| 9 | React Flow canvas + custom nodes/edges + layout | Visual verification |
-| 10 | Detail panel | Visual verification |
-| 11 | Filter bar | Visual verification |
-| 12 | File watcher | Live update verification |
-| 13 | Graph caching | Instant startup verification |
+| 7 | Worker process entry | Playwright snapshot: worker ready |
+| 8 | Main process IPC + menu | Playwright snapshot: no console errors |
+| 9 | React Flow canvas + custom nodes/edges + layout | Playwright snapshots: welcome + graph rendered |
+| 10 | Detail panel | Playwright snapshot: detail panel with node selected |
+| 11 | Filter bar | Playwright snapshots: filter bar + filtered state |
+| 12 | File watcher | Playwright snapshots: before/after file edit |
+| 13 | Graph caching | Playwright snapshot: cached load |
 | 14 | E2E smoke test | 1 integration test |
 
 **Total: 14 tasks, ~14 commits, full Phase 1 coverage.**

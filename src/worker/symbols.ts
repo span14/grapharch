@@ -114,6 +114,7 @@ function processFunctionDef(
     label: name,
     filePath,
     lineRange: [node.startPosition.row + 1, node.endPosition.row + 1],
+    parent: filePath,
     metadata: {
       async: isAsync(node),
       ...(decorators.length > 0 ? { decorators } : {}),
@@ -147,6 +148,7 @@ function processClassDef(
     label: name,
     filePath,
     lineRange: [node.startPosition.row + 1, node.endPosition.row + 1],
+    parent: filePath,
     childCount: methods.length,
     metadata: {
       ...(decorators.length > 0 ? { decorators } : {}),

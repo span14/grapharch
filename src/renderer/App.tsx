@@ -9,6 +9,7 @@ function App() {
   useGraphIPC()
   const graph = useGraphStore((s) => s.graph)
   const loading = useGraphStore((s) => s.loading)
+  const error = useGraphStore((s) => s.error)
 
   const handleOpen = async () => {
     await window.grapharc.openFolderDialog()
@@ -21,6 +22,7 @@ function App() {
         <p>Open a Python project to visualize its architecture</p>
         <button onClick={handleOpen}>Open Project Folder...</button>
         {loading && <p>Parsing...</p>}
+        {error && <p style={{ color: '#ef4444', maxWidth: 600, fontSize: 13, whiteSpace: 'pre-wrap' }}>{error}</p>}
       </div>
     )
   }

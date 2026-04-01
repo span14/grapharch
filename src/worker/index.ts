@@ -18,6 +18,17 @@ import { buildGraph } from './graph'
 import { readCache, writeCache } from './cache'
 import { startWatching, stopWatching } from './watcher'
 import type { GraphData, WorkerMessage } from '../shared/types'
+import fs from 'node:fs'
+import path from 'node:path'
+import os from 'node:os'
+
+const LOG_FILE = path.join(os.homedir(), '.grapharc', 'worker.log')
+function log(msg: string): void {
+  try {
+    fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true })
+    fs.appendFileSync(LOG_FILE, `${new Date().toISOString()} ${msg}\n`)
+  } catch { /* ignore */ }
+}
 
 let currentRootDir: string | null = null
 let parserInitialized = false
@@ -83,6 +94,7 @@ process.parentPort.on('message', async (e: Electron.MessageEvent) => {
     stopWatching()
 
     try {
+      log(`project:open rootDir=${rootDir} __dirname=${__dirname}`)
       // 1. Check cache -- if it exists, send cached data immediately
       const cached = await readCache(rootDir)
       if (cached) {
@@ -104,7 +116,8 @@ process.parentPort.on('message', async (e: Electron.MessageEvent) => {
       // 5. Start file watcher
       setupWatcher(rootDir)
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err)
+      const message = err instanceof Error ? err.message + '\n' + (err as Error).stack : String(err)
+      log(`ERROR: ${message}`)
       send({ type: 'parse:error', data: { file: rootDir, error: message } })
     }
   }

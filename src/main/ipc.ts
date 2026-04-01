@@ -12,10 +12,20 @@ export function setupIPC(mainWindow: BrowserWindow): void {
 
   worker = utilityProcess.fork(workerPath, [], {
     serviceName: 'grapharc-parser',
+    stdio: 'pipe',
+  })
+
+  // Log worker stdout/stderr for debugging
+  worker.stdout?.on('data', (data: Buffer) => {
+    console.log('[worker:stdout]', data.toString().trim())
+  })
+  worker.stderr?.on('data', (data: Buffer) => {
+    console.error('[worker:stderr]', data.toString().trim())
   })
 
   // Forward worker messages to renderer
   worker.on('message', (msg: { type: string; data?: unknown }) => {
+    console.log('[worker:msg]', msg.type)
     if (!mainWindow.isDestroyed()) {
       mainWindow.webContents.send(msg.type, msg.data)
     }

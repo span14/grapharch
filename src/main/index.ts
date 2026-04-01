@@ -28,7 +28,9 @@ const createWindow = () => {
     );
   }
 
-  mainWindow.webContents.openDevTools();
+  if (process.env.NODE_ENV !== 'test') {
+    mainWindow.webContents.openDevTools();
+  }
 
   // Wire up IPC handlers and spawn the worker process
   setupIPC(mainWindow);
