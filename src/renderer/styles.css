@@ -1,0 +1,149 @@
+/* GraphArc Dark Theme Styles */
+
+.app {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+.canvas-container {
+  flex: 1;
+  height: 100%;
+}
+
+/* --- Nodes --- */
+
+.node {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  border: 1px solid #333;
+  min-width: 120px;
+  color: #e0e0e0;
+}
+
+.node-module {
+  background: #16213e;
+  border-color: #0f3460;
+}
+
+.node-module.expanded {
+  min-height: 200px;
+}
+
+.node-function {
+  background: #1a1a2e;
+  border-color: #3b82f6;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.node-class {
+  background: #1e1e3f;
+  border-color: #8b5cf6;
+}
+
+.node-method {
+  background: #252547;
+  border-color: #6366f1;
+  border-radius: 12px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.node-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.node-icon {
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.node-label {
+  font-weight: 500;
+}
+
+.node-count {
+  font-size: 11px;
+  opacity: 0.6;
+  margin-left: auto;
+}
+
+.node-lines {
+  font-size: 10px;
+  opacity: 0.5;
+}
+
+.badge {
+  background: #3b82f6;
+  color: white;
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-right: 4px;
+}
+
+/* --- Welcome Screen --- */
+
+.welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 16px;
+  color: #888;
+}
+
+.welcome h1 {
+  font-size: 3rem;
+  font-weight: 700;
+  color: #e0e0e0;
+}
+
+.welcome p {
+  color: #888;
+}
+
+.welcome button {
+  padding: 10px 24px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.welcome button:hover {
+  background: #2563eb;
+}
+
+/* --- React Flow overrides for dark theme --- */
+
+.react-flow__background {
+  background-color: #1a1a2e;
+}
+
+.react-flow__minimap {
+  background-color: #16213e;
+}
+
+.react-flow__controls button {
+  background-color: #16213e;
+  border-color: #333;
+  color: #e0e0e0;
+}
+
+.react-flow__controls button:hover {
+  background-color: #1e2a4a;
+}
+
+.react-flow__controls button svg {
+  fill: #e0e0e0;
+}

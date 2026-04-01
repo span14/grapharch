@@ -1,0 +1,15 @@
+import { Handle, Position, type NodeProps, type Node } from '@xyflow/react'
+
+export type MethodNodeData = {
+  label: string
+}
+
+export function MethodNode({ data }: NodeProps<Node<MethodNodeData>>) {
+  return (
+    <div className="node node-method">
+      <Handle type="target" position={Position.Top} />
+      <span className="node-label">{data.label}</span>
+      <Handle type="source" position={Position.Bottom} />
+    </div>
+  )
+}
