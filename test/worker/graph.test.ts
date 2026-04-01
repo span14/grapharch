@@ -11,7 +11,7 @@ beforeAll(async () => {
 
 describe('buildGraph', () => {
   it('produces a complete GraphData from a project directory', async () => {
-    const graph = await buildGraph(FIXTURES)
+    const { graph } = await buildGraph(FIXTURES)
 
     expect(graph.metadata.rootDir).toBe(FIXTURES)
     expect(graph.metadata.fileCount).toBe(5)
@@ -25,7 +25,7 @@ describe('buildGraph', () => {
   })
 
   it('creates module-level rollup edges', async () => {
-    const graph = await buildGraph(FIXTURES)
+    const { graph } = await buildGraph(FIXTURES)
 
     // Rollup edges have a weight field
     const rollupEdges = graph.edges.filter((e) => e.weight !== undefined && e.weight > 0)
@@ -43,7 +43,7 @@ describe('buildGraph', () => {
   })
 
   it('includes parsedAt timestamp in metadata', async () => {
-    const graph = await buildGraph(FIXTURES)
+    const { graph } = await buildGraph(FIXTURES)
     expect(graph.metadata.parsedAt).toBeDefined()
     // Should be a valid ISO date
     expect(() => new Date(graph.metadata.parsedAt)).not.toThrow()

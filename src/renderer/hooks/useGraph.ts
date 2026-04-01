@@ -12,6 +12,14 @@ declare global {
       onGraphDiff: (cb: (data: GraphDiff) => void) => () => void
       onParseProgress: (cb: (data: { total: number; done: number }) => void) => () => void
       onParseError: (cb: (data: { file: string; error: string }) => void) => () => void
+      // Analysis
+      startAnalysis: (model?: string) => Promise<void>
+      cancelAnalysis: () => Promise<void>
+      onAnalysisProgress: (cb: (data: unknown) => void) => () => void
+      onAnalysisNode: (cb: (data: unknown) => void) => () => void
+      onAnalysisEdge: (cb: (data: unknown) => void) => () => void
+      onAnalysisProject: (cb: (data: unknown) => void) => () => void
+      onAnalysisError: (cb: (data: unknown) => void) => () => void
     }
   }
 }

@@ -1,12 +1,15 @@
 import { useGraphIPC } from './hooks/useGraph'
+import { useAnalysisIPC } from './hooks/useAnalysis'
 import { useGraphStore } from './stores/graphStore'
 import { Canvas } from './Canvas'
 import { DetailPanel } from './panels/DetailPanel'
 import { FilterBar } from './panels/FilterBar'
+import { AnalysisPanel } from './panels/AnalysisPanel'
 import './styles.css'
 
 function App() {
   useGraphIPC()
+  useAnalysisIPC()
   const graph = useGraphStore((s) => s.graph)
   const loading = useGraphStore((s) => s.loading)
   const error = useGraphStore((s) => s.error)
@@ -29,6 +32,7 @@ function App() {
 
   return (
     <div className="app">
+      <AnalysisPanel />
       <div className="main-area">
         <FilterBar />
         <div className="canvas-container">

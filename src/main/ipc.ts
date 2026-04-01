@@ -50,6 +50,14 @@ export function setupIPC(mainWindow: BrowserWindow): void {
     worker?.postMessage({ type: 'project:open', data: { rootDir } })
     return rootDir
   })
+
+  ipcMain.handle('analysis:start', (_event, model?: string) => {
+    worker?.postMessage({ type: 'analysis:start', data: { model } })
+  })
+
+  ipcMain.handle('analysis:cancel', () => {
+    worker?.postMessage({ type: 'analysis:cancel' })
+  })
 }
 
 export function shutdownWorker(): void {

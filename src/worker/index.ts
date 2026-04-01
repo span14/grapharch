@@ -17,6 +17,7 @@ import { initParser } from './symbols'
 import { buildGraph } from './graph'
 import { readCache, writeCache } from './cache'
 import { startWatching, stopWatching } from './watcher'
+import { AnalysisPipeline } from './analysis'
 import type { GraphData, WorkerMessage } from '../shared/types'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -32,6 +33,9 @@ function log(msg: string): void {
 
 let currentRootDir: string | null = null
 let parserInitialized = false
+let lastFileSources: Map<string, string> | null = null
+let lastGraph: GraphData | null = null
+let currentAnalysis: AnalysisPipeline | null = null
 
 function send(msg: WorkerMessage): void {
   process.parentPort.postMessage(msg)
@@ -52,7 +56,10 @@ async function fullParse(rootDir: string): Promise<GraphData> {
     parserInitialized = true
   }
   send({ type: 'parse:progress', data: { total: 0, done: 0 } })
-  return buildGraph(rootDir)
+  const result = await buildGraph(rootDir)
+  lastFileSources = result.fileSources
+  lastGraph = result.graph
+  return result.graph
 }
 
 function setupWatcher(rootDir: string): void {
@@ -74,9 +81,10 @@ async function handleFileChange(
   _filePath: string
 ): Promise<void> {
   try {
-    const graph = await buildGraph(rootDir)
-    send({ type: 'graph:ready', data: graph })
-    await writeCache(rootDir, graph)
+    const result = await buildGraph(rootDir)
+    lastFileSources = result.fileSources
+    send({ type: 'graph:ready', data: result.graph })
+    await writeCache(rootDir, result.graph)
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     send({ type: 'parse:error', data: { file: _filePath, error: message } })
@@ -139,6 +147,33 @@ process.parentPort.on('message', async (e: Electron.MessageEvent) => {
         })
       }
     }
+  }
+
+  if (msg.type === 'analysis:start') {
+    if (!lastGraph || !lastFileSources) {
+      send({ type: 'analysis:error', data: { target: 'project', error: 'No project loaded. Open a project first.' } })
+      return
+    }
+
+    // Cancel any running analysis
+    currentAnalysis?.cancel()
+
+    const model = (msg.data as { model?: string })?.model
+    currentAnalysis = new AnalysisPipeline(lastGraph, lastFileSources, send, model)
+    try {
+      await currentAnalysis.run()
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      log(`Analysis error: ${message}`)
+      send({ type: 'analysis:error', data: { target: 'project', error: message } })
+    } finally {
+      currentAnalysis = null
+    }
+  }
+
+  if (msg.type === 'analysis:cancel') {
+    currentAnalysis?.cancel()
+    currentAnalysis = null
   }
 })
 

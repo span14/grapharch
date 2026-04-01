@@ -40,6 +40,39 @@
   gap: 6px;
 }
 
+/* --- Function Card Node --- */
+
+.node-fn-card {
+  background: #1a1a2e;
+  border: 1px solid #3b82f6;
+  border-radius: 6px;
+  padding: 0;
+  min-width: 220px;
+  font-size: 12px;
+  color: #e0e0e0;
+}
+.fn-card-header {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid #333;
+}
+.fn-card-name { font-weight: 600; flex: 1; }
+.fn-card-lines { font-size: 10px; opacity: 0.4; }
+.fn-card-section {
+  padding: 4px 10px;
+  border-bottom: 1px solid #2a2a4a;
+}
+.fn-card-section:last-child { border-bottom: none; }
+.fn-card-label {
+  font-size: 9px; font-weight: 700; opacity: 0.5;
+  text-transform: uppercase; margin-right: 8px;
+}
+.fn-card-params { display: flex; flex-direction: column; gap: 1px; }
+.fn-card-param { display: flex; gap: 4px; padding-left: 28px; }
+.fn-param-name { color: #93c5fd; }
+.fn-param-type { color: #a78bfa; }
+.fn-card-out { display: flex; align-items: center; gap: 4px; }
+
 .node-class {
   background: #1e1e3f;
   border-color: #8b5cf6;
@@ -118,17 +151,15 @@
 
 /* --- Edge Labels --- */
 
-.edge-data-flow-label {
-  font-size: 9px;
-  color: #94a3b8;
-  background: rgba(22, 33, 62, 0.9);
+.edge-type-label {
+  font-size: 10px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: #a78bfa;
+  background: rgba(26, 26, 46, 0.95);
   padding: 2px 6px;
   border-radius: 3px;
   border: 1px solid #333;
-  max-width: 200px;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* --- Layer Node --- */
@@ -278,6 +309,19 @@
 .edge-toggles { display: flex; gap: 12px; }
 .edge-toggle { display: flex; align-items: center; gap: 4px; font-size: 12px; opacity: 0.8; cursor: pointer; }
 .stats { margin-left: auto; font-size: 11px; opacity: 0.5; }
+
+/* --- Breadcrumb --- */
+
+.breadcrumb {
+  height: 32px; background: #0f172a; border-bottom: 1px solid #333;
+  display: flex; align-items: center; padding: 0 12px; gap: 2px;
+}
+.breadcrumb-btn {
+  background: none; border: none; color: #93c5fd; cursor: pointer;
+  font-size: 12px; padding: 2px 6px; border-radius: 3px;
+}
+.breadcrumb-btn:hover { background: #1e293b; }
+.breadcrumb-sep { color: #475569; margin: 0 4px; font-size: 11px; }
 
 /* --- Analysis Panel --- */
 

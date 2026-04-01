@@ -11,7 +11,7 @@ beforeAll(async () => {
 
 describe('end-to-end graph building', () => {
   it('builds a complete graph from the fixture project', async () => {
-    const graph = await buildGraph(FIXTURES)
+    const { graph } = await buildGraph(FIXTURES)
 
     // Modules
     const modules = graph.nodes.filter((n) => n.kind === 'module')
@@ -57,19 +57,19 @@ describe('end-to-end graph building', () => {
   })
 
   it('all node IDs are unique', async () => {
-    const graph = await buildGraph(FIXTURES)
+    const { graph } = await buildGraph(FIXTURES)
     const ids = graph.nodes.map((n) => n.id)
     expect(new Set(ids).size).toBe(ids.length)
   })
 
   it('all edge IDs are unique', async () => {
-    const graph = await buildGraph(FIXTURES)
+    const { graph } = await buildGraph(FIXTURES)
     const ids = graph.edges.map((e) => e.id)
     expect(new Set(ids).size).toBe(ids.length)
   })
 
   it('all edge sources and targets reference existing nodes', async () => {
-    const graph = await buildGraph(FIXTURES)
+    const { graph } = await buildGraph(FIXTURES)
     const nodeIds = new Set(graph.nodes.map((n) => n.id))
     for (const edge of graph.edges) {
       expect(nodeIds.has(edge.source), `edge ${edge.id}: source ${edge.source} not in nodes`).toBe(true)

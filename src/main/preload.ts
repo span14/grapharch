@@ -24,4 +24,33 @@ contextBridge.exposeInMainWorld('grapharc', {
     ipcRenderer.on('parse:error', handler)
     return () => { ipcRenderer.removeListener('parse:error', handler) }
   },
+
+  // Analysis
+  startAnalysis: (model?: string) => ipcRenderer.invoke('analysis:start', model),
+  cancelAnalysis: () => ipcRenderer.invoke('analysis:cancel'),
+  onAnalysisProgress: (cb: (data: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: unknown) => cb(data)
+    ipcRenderer.on('analysis:progress', handler)
+    return () => { ipcRenderer.removeListener('analysis:progress', handler) }
+  },
+  onAnalysisNode: (cb: (data: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: unknown) => cb(data)
+    ipcRenderer.on('analysis:node', handler)
+    return () => { ipcRenderer.removeListener('analysis:node', handler) }
+  },
+  onAnalysisEdge: (cb: (data: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: unknown) => cb(data)
+    ipcRenderer.on('analysis:edge', handler)
+    return () => { ipcRenderer.removeListener('analysis:edge', handler) }
+  },
+  onAnalysisProject: (cb: (data: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: unknown) => cb(data)
+    ipcRenderer.on('analysis:project', handler)
+    return () => { ipcRenderer.removeListener('analysis:project', handler) }
+  },
+  onAnalysisError: (cb: (data: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: unknown) => cb(data)
+    ipcRenderer.on('analysis:error', handler)
+    return () => { ipcRenderer.removeListener('analysis:error', handler) }
+  },
 })

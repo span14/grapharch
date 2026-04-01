@@ -59,7 +59,12 @@ export function computeModuleRollups(
   return rollupEdges
 }
 
-export async function buildGraph(rootDir: string): Promise<GraphData> {
+export interface BuildGraphResult {
+  graph: GraphData
+  fileSources: Map<string, string>
+}
+
+export async function buildGraph(rootDir: string): Promise<BuildGraphResult> {
   const files = await discoverPythonFiles(rootDir)
   const allNodes: GraphNode[] = []
   const fileSources = new Map<string, string>()
@@ -77,12 +82,15 @@ export async function buildGraph(rootDir: string): Promise<GraphData> {
   const moduleEdges = computeModuleRollups(allNodes, edges)
 
   return {
-    nodes: allNodes,
-    edges: [...edges, ...moduleEdges],
-    metadata: {
-      rootDir,
-      fileCount: files.length,
-      parsedAt: new Date().toISOString(),
+    graph: {
+      nodes: allNodes,
+      edges: [...edges, ...moduleEdges],
+      metadata: {
+        rootDir,
+        fileCount: files.length,
+        parsedAt: new Date().toISOString(),
+      },
     },
+    fileSources,
   }
 }
