@@ -3,13 +3,11 @@ import path from 'node:path'
 import os from 'node:os'
 import crypto from 'node:crypto'
 import type {
-  GraphNode,
   ProjectAnalysis,
   FunctionAnalysis,
   LayerAssignment,
   EdgeAnalysis,
 } from '../../shared/types'
-import { getNodeSource } from './sourceCollector'
 
 function cacheDir(rootDir: string): string {
   const hash = crypto.createHash('sha256').update(rootDir).digest('hex').slice(0, 12)
@@ -24,55 +22,25 @@ function safeId(id: string): string {
   return crypto.createHash('sha256').update(id).digest('hex').slice(0, 16)
 }
 
-// ── Source hashes for invalidation ─────────────────────────────
-
-export function computeSourceHash(source: string): string {
-  return crypto.createHash('sha256').update(source).digest('hex').slice(0, 16)
-}
-
-export function loadSourceHashes(rootDir: string): Record<string, string> {
-  const file = path.join(cacheDir(rootDir), 'source-hashes.json')
-  try {
-    return JSON.parse(fs.readFileSync(file, 'utf-8'))
-  } catch {
-    return {}
-  }
-}
-
-export function saveSourceHashes(rootDir: string, hashes: Record<string, string>): void {
-  const dir = cacheDir(rootDir)
-  ensureDir(dir)
-  fs.writeFileSync(path.join(dir, 'source-hashes.json'), JSON.stringify(hashes, null, 2))
-}
-
-export function findStaleNodes(
-  nodes: GraphNode[],
-  fileSources: Map<string, string>,
-  cachedHashes: Record<string, string>
-): GraphNode[] {
-  return nodes.filter((node) => {
-    const source = getNodeSource(node, fileSources)
-    if (!source) return true
-    const currentHash = computeSourceHash(source)
-    return cachedHashes[node.id] !== currentHash
-  })
-}
-
 // ── Project analysis ───────────────────────────────────────────
 
-export function readProjectAnalysis(rootDir: string): ProjectAnalysis | null {
+export function readProjectAnalysis(rootDir: string): { analysis: ProjectAnalysis; commitHash: string | null } | null {
   const file = path.join(cacheDir(rootDir), 'project.json')
   try {
-    return JSON.parse(fs.readFileSync(file, 'utf-8'))
+    const raw = JSON.parse(fs.readFileSync(file, 'utf-8'))
+    const commitHash = raw.commitHash ?? null
+    // Remove commitHash from the object to get clean ProjectAnalysis
+    const { commitHash: _, ...analysis } = raw
+    return { analysis, commitHash }
   } catch {
     return null
   }
 }
 
-export function writeProjectAnalysis(rootDir: string, analysis: ProjectAnalysis): void {
+export function writeProjectAnalysis(rootDir: string, analysis: ProjectAnalysis, commitHash: string | null): void {
   const dir = cacheDir(rootDir)
   ensureDir(dir)
-  fs.writeFileSync(path.join(dir, 'project.json'), JSON.stringify(analysis, null, 2))
+  fs.writeFileSync(path.join(dir, 'project.json'), JSON.stringify({ commitHash, ...analysis }, null, 2))
 }
 
 // ── Node analysis ──────────────────────────────────────────────
@@ -123,7 +91,8 @@ export function readAllCachedAnalysis(rootDir: string): {
   nodes: Map<string, FunctionAnalysis | LayerAssignment>
   edges: Map<string, EdgeAnalysis>
 } {
-  const project = readProjectAnalysis(rootDir)
+  const cached = readProjectAnalysis(rootDir)
+  const project = cached?.analysis ?? null
   const nodes = new Map<string, FunctionAnalysis | LayerAssignment>()
   const edges = new Map<string, EdgeAnalysis>()
 

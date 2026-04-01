@@ -14,10 +14,12 @@
 //   { type: 'parse:error', data: { file, error } }
 
 import { initParser } from './symbols'
-import { buildGraph } from './graph'
+import { buildGraph, buildGraphIncremental } from './graph'
+import { isGitRepo, getHeadCommit, getChangedFiles } from './git'
 import { readCache, writeCache } from './cache'
 import { startWatching, stopWatching } from './watcher'
 import { AnalysisPipeline } from './analysis'
+import { readProjectAnalysis } from './analysis/cache'
 import type { GraphData, WorkerMessage } from '../shared/types'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -83,8 +85,10 @@ async function handleFileChange(
   try {
     const result = await buildGraph(rootDir)
     lastFileSources = result.fileSources
+    lastGraph = result.graph
     send({ type: 'graph:ready', data: result.graph })
-    await writeCache(rootDir, result.graph)
+    const commitHash = isGitRepo(rootDir) ? getHeadCommit(rootDir) : null
+    await writeCache(rootDir, result.graph, commitHash)
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     send({ type: 'parse:error', data: { file: _filePath, error: message } })
@@ -97,31 +101,73 @@ process.parentPort.on('message', async (e: Electron.MessageEvent) => {
   if (msg.type === 'project:open') {
     const { rootDir } = msg.data as { rootDir: string }
     currentRootDir = rootDir
-
-    // Stop any existing watcher from a previous project
     stopWatching()
 
     try {
-      log(`project:open rootDir=${rootDir} __dirname=${__dirname}`)
-      // 1. Check cache -- if it exists, send cached data immediately
-      const cached = await readCache(rootDir)
-      if (cached) {
-        send({ type: 'graph:ready', data: cached })
+      log(`project:open rootDir=${rootDir}`)
+      const cachedResult = await readCache(rootDir)
+
+      // Send cached graph immediately if available
+      if (cachedResult) {
+        send({ type: 'graph:ready', data: cachedResult.graph })
       }
 
-      // 2. Full parse
-      const graph = await fullParse(rootDir)
+      let graph: GraphData
+      const useGit = isGitRepo(rootDir)
+      const currentCommit = useGit ? getHeadCommit(rootDir) : null
 
-      // 3. If cache was sent and fresh graph differs, send the update
-      //    If no cache was sent, always send the fresh graph
-      if (!cached || !graphsEqual(cached, graph)) {
-        send({ type: 'graph:ready', data: graph })
+      if (
+        cachedResult &&
+        useGit &&
+        currentCommit &&
+        cachedResult.commitHash &&
+        cachedResult.commitHash === currentCommit
+      ) {
+        // Same commit -- cached graph is current, no re-parse needed
+        log(`Same commit ${currentCommit.slice(0, 8)}, using cache`)
+        graph = cachedResult.graph
+        // Still need fileSources for potential analysis
+        const result = await buildGraph(rootDir)
+        lastFileSources = result.fileSources
+        lastGraph = result.graph
+      } else if (
+        cachedResult &&
+        useGit &&
+        currentCommit &&
+        cachedResult.commitHash
+      ) {
+        // Different commit -- incremental parse
+        const changedFiles = getChangedFiles(rootDir, cachedResult.commitHash, currentCommit)
+        log(`Incremental parse: ${changedFiles.length} changed files since ${cachedResult.commitHash.slice(0, 8)}`)
+
+        if (changedFiles.length === 0) {
+          // No .py files changed (maybe only non-Python changes)
+          graph = cachedResult.graph
+          const result = await buildGraph(rootDir)
+          lastFileSources = result.fileSources
+          lastGraph = graph
+        } else {
+          const result = await buildGraphIncremental(rootDir, cachedResult.graph, changedFiles)
+          lastFileSources = result.fileSources
+          lastGraph = result.graph
+          graph = result.graph
+        }
+
+        if (!cachedResult || !graphsEqual(cachedResult.graph, graph)) {
+          send({ type: 'graph:ready', data: graph })
+        }
+        await writeCache(rootDir, graph, currentCommit)
+      } else {
+        // No cache, not a git repo, or no commit hash -- full parse
+        const result = await fullParse(rootDir)
+        graph = result
+
+        if (!cachedResult || !graphsEqual(cachedResult.graph, graph)) {
+          send({ type: 'graph:ready', data: graph })
+        }
+        await writeCache(rootDir, graph, currentCommit)
       }
 
-      // 4. Write fresh graph to cache
-      await writeCache(rootDir, graph)
-
-      // 5. Start file watcher
       setupWatcher(rootDir)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message + '\n' + (err as Error).stack : String(err)
@@ -135,7 +181,8 @@ process.parentPort.on('message', async (e: Electron.MessageEvent) => {
       try {
         const graph = await fullParse(currentRootDir)
         send({ type: 'graph:ready', data: graph })
-        await writeCache(currentRootDir, graph)
+        const commitHash = isGitRepo(currentRootDir) ? getHeadCommit(currentRootDir) : null
+        await writeCache(currentRootDir, graph, commitHash)
 
         // Restart watcher in case it got into a bad state
         setupWatcher(currentRootDir)
@@ -159,7 +206,23 @@ process.parentPort.on('message', async (e: Electron.MessageEvent) => {
     currentAnalysis?.cancel()
 
     const model = (msg.data as { model?: string })?.model
-    currentAnalysis = new AnalysisPipeline(lastGraph, lastFileSources, send, model)
+
+    // Determine changed files for incremental analysis
+    let changedFiles: string[] | null = null
+    if (currentRootDir && isGitRepo(currentRootDir)) {
+      const cached = readProjectAnalysis(currentRootDir)
+      const currentCommit = getHeadCommit(currentRootDir)
+      if (cached && cached.commitHash && currentCommit && cached.commitHash !== currentCommit) {
+        changedFiles = getChangedFiles(currentRootDir, cached.commitHash, currentCommit)
+        log(`Incremental analysis: ${changedFiles.length} changed files`)
+      } else if (cached && cached.commitHash === currentCommit) {
+        // Same commit — all analysis is current
+        log('Analysis cache is current (same commit)')
+        // Still proceed — user explicitly clicked re-analyze
+      }
+    }
+
+    currentAnalysis = new AnalysisPipeline(lastGraph, lastFileSources, send, model, changedFiles)
     try {
       await currentAnalysis.run()
     } catch (err: unknown) {

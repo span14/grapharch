@@ -24,10 +24,8 @@ import {
   writeNodeAnalysis,
   writeEdgeAnalysis,
   writeManifest,
-  computeSourceHash,
-  saveSourceHashes,
 } from './cache'
-import { getNodeSource } from './sourceCollector'
+import { getHeadCommit } from '../git'
 
 interface LayerResponse {
   summary: string
@@ -49,13 +47,13 @@ export class AnalysisPipeline {
 
   private analyzedNodeIds: string[] = []
   private analyzedEdgeIds: string[] = []
-  private sourceHashes: Record<string, string> = {}
 
   constructor(
     private graph: GraphData,
     private fileSources: Map<string, string>,
     private send: (msg: WorkerMessage) => void,
     private model?: string,
+    private changedFiles?: string[] | null,
   ) {}
 
   async run(): Promise<void> {
@@ -71,11 +69,12 @@ export class AnalysisPipeline {
     // Phase C: Edge analysis
     await this.analyzeEdges(project)
 
-    // Write manifest and source hashes for cache invalidation
+    // Write manifest and commit hash for cache invalidation
     if (!this.cancelled) {
       const rootDir = this.graph.metadata.rootDir
       writeManifest(rootDir, this.analyzedNodeIds, this.analyzedEdgeIds)
-      saveSourceHashes(rootDir, this.sourceHashes)
+      const commitHash = getHeadCommit(rootDir)
+      writeProjectAnalysis(rootDir, project, commitHash)
     }
   }
 
@@ -132,7 +131,8 @@ export class AnalysisPipeline {
 
     // Cache layer assignments
     const rootDir = this.graph.metadata.rootDir
-    writeProjectAnalysis(rootDir, project)
+    const commitHash = getHeadCommit(rootDir)
+    writeProjectAnalysis(rootDir, project, commitHash)
     for (const [moduleId, assignment] of Object.entries(result.moduleAnalysis)) {
       writeNodeAnalysis(rootDir, moduleId, {
         layer: assignment.layer,
@@ -148,7 +148,14 @@ export class AnalysisPipeline {
   // ── Phase B: Functions ───────────────────────────────────────
 
   private async analyzeFunctions(project: ProjectAnalysis): Promise<void> {
-    const functions = this.graph.nodes.filter((n) => n.kind !== 'module')
+    let functions = this.graph.nodes.filter((n) => n.kind !== 'module')
+
+    // If changedFiles provided, only analyze functions in changed files
+    if (this.changedFiles && this.changedFiles.length > 0) {
+      const changedSet = new Set(this.changedFiles)
+      functions = functions.filter((n) => changedSet.has(n.filePath))
+    }
+
     const batches = batchNodes(functions, this.fileSources)
     const total = functions.length
     let done = 0
@@ -184,9 +191,6 @@ export class AnalysisPipeline {
             })
             writeNodeAnalysis(this.graph.metadata.rootDir, node.id, fullAnalysis)
             this.analyzedNodeIds.push(node.id)
-            // Track source hash
-            const src = getNodeSource(node, this.fileSources)
-            if (src) this.sourceHashes[node.id] = computeSourceHash(src)
           }
           done++
         }
@@ -207,12 +211,22 @@ export class AnalysisPipeline {
   private async analyzeEdges(project: ProjectAnalysis): Promise<void> {
     // Only analyze cross-module call edges between functions (not rollup edges)
     const nodeMap = new Map(this.graph.nodes.map((n) => [n.id, n]))
-    const crossModuleCallEdges = this.graph.edges.filter((e) => {
+    let crossModuleCallEdges = this.graph.edges.filter((e) => {
       if (e.kind !== 'call') return false
       const src = nodeMap.get(e.source)
       const tgt = nodeMap.get(e.target)
       return src && tgt && src.filePath !== tgt.filePath
     })
+
+    // If changedFiles provided, only analyze edges touching changed files
+    if (this.changedFiles && this.changedFiles.length > 0) {
+      const changedSet = new Set(this.changedFiles)
+      crossModuleCallEdges = crossModuleCallEdges.filter((e) => {
+        const src = nodeMap.get(e.source)
+        const tgt = nodeMap.get(e.target)
+        return (src && changedSet.has(src.filePath)) || (tgt && changedSet.has(tgt.filePath))
+      })
+    }
 
     const batches = batchEdges(crossModuleCallEdges, nodeMap, this.fileSources)
     const total = crossModuleCallEdges.length

@@ -64,6 +64,53 @@ export interface BuildGraphResult {
   fileSources: Map<string, string>
 }
 
+export async function buildGraphIncremental(
+  rootDir: string,
+  cachedGraph: GraphData,
+  changedFiles: string[],
+): Promise<BuildGraphResult> {
+  const changedSet = new Set(changedFiles)
+  const allNodes: GraphNode[] = []
+  const fileSources = new Map<string, string>()
+
+  // Discover all current .py files
+  const files = await discoverPythonFiles(rootDir)
+
+  for (const file of files) {
+    const rel = path.relative(rootDir, file)
+
+    if (changedSet.has(rel)) {
+      // Changed file: re-read and re-parse
+      const source = await fs.readFile(file, 'utf-8')
+      fileSources.set(rel, source)
+      allNodes.push(...extractSymbols(source, rel))
+    } else {
+      // Unchanged file: keep cached nodes, read source for fileSources map
+      const cachedNodes = cachedGraph.nodes.filter((n) => n.filePath === rel)
+      allNodes.push(...cachedNodes)
+      const source = await fs.readFile(file, 'utf-8')
+      fileSources.set(rel, source)
+    }
+  }
+
+  // Re-resolve all edges (edges can span files, so we need full resolution)
+  const edges = resolveEdges(allNodes, fileSources, rootDir)
+  const moduleEdges = computeModuleRollups(allNodes, edges)
+
+  return {
+    graph: {
+      nodes: allNodes,
+      edges: [...edges, ...moduleEdges],
+      metadata: {
+        rootDir,
+        fileCount: files.length,
+        parsedAt: new Date().toISOString(),
+      },
+    },
+    fileSources,
+  }
+}
+
 export async function buildGraph(rootDir: string): Promise<BuildGraphResult> {
   const files = await discoverPythonFiles(rootDir)
   const allNodes: GraphNode[] = []
