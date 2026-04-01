@@ -34,6 +34,13 @@ const config: ForgeConfig = {
           config: 'vite.preload.config.ts',
           target: 'preload',
         },
+        {
+          // Worker utility process -- built as a main-target entry
+          // so it gets Node.js externals and CJS output in .vite/build/
+          entry: 'src/worker/index.ts',
+          config: 'vite.worker.config.ts',
+          target: 'main',
+        },
       ],
       renderer: [
         {
