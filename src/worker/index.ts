@@ -14,12 +14,12 @@
 //   { type: 'parse:error', data: { file, error } }
 
 import { initParser } from './symbols'
-import { buildGraph, buildGraphIncremental } from './graph'
+import { buildGraph, buildGraphIncremental, readFileSources } from './graph'
 import { isGitRepo, getHeadCommit, getChangedFiles } from './git'
 import { readCache, writeCache } from './cache'
 import { startWatching, stopWatching } from './watcher'
 import { AnalysisPipeline } from './analysis'
-import { readProjectAnalysis } from './analysis/cache'
+import { readProjectAnalysis, readAllCachedAnalysis } from './analysis/cache'
 import type { GraphData, WorkerMessage } from '../shared/types'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -38,18 +38,22 @@ let parserInitialized = false
 let lastFileSources: Map<string, string> | null = null
 let lastGraph: GraphData | null = null
 let currentAnalysis: AnalysisPipeline | null = null
+let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
 function send(msg: WorkerMessage): void {
   process.parentPort.postMessage(msg)
 }
 
 function graphsEqual(a: GraphData, b: GraphData): boolean {
-  return (
-    a.nodes.length === b.nodes.length &&
-    a.edges.length === b.edges.length &&
-    JSON.stringify(a.nodes) === JSON.stringify(b.nodes) &&
-    JSON.stringify(a.edges) === JSON.stringify(b.edges)
-  )
+  if (a.nodes.length !== b.nodes.length) return false
+  if (a.edges.length !== b.edges.length) return false
+  if (a.metadata.parsedAt !== b.metadata.parsedAt) return false
+  // Check node IDs match (fast proxy for structural equality)
+  const aIds = new Set(a.nodes.map((n) => n.id))
+  for (const n of b.nodes) {
+    if (!aIds.has(n.id)) return false
+  }
+  return true
 }
 
 async function fullParse(rootDir: string): Promise<GraphData> {
@@ -67,13 +71,13 @@ async function fullParse(rootDir: string): Promise<GraphData> {
 function setupWatcher(rootDir: string): void {
   startWatching(
     rootDir,
-    // onChange: file added or modified
     (filePath: string) => {
-      void handleFileChange(rootDir, filePath)
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => void handleFileChange(rootDir, filePath), 300)
     },
-    // onRemove: file deleted
     (filePath: string) => {
-      void handleFileChange(rootDir, filePath)
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => void handleFileChange(rootDir, filePath), 300)
     }
   )
 }
@@ -82,6 +86,12 @@ async function handleFileChange(
   rootDir: string,
   _filePath: string
 ): Promise<void> {
+  // Cancel any running analysis — graph is changing
+  if (currentAnalysis) {
+    currentAnalysis.cancel()
+    currentAnalysis = null
+  }
+
   try {
     const result = await buildGraph(rootDir)
     lastFileSources = result.fileSources
@@ -123,13 +133,10 @@ process.parentPort.on('message', async (e: Electron.MessageEvent) => {
         cachedResult.commitHash &&
         cachedResult.commitHash === currentCommit
       ) {
-        // Same commit -- cached graph is current, no re-parse needed
         log(`Same commit ${currentCommit.slice(0, 8)}, using cache`)
         graph = cachedResult.graph
-        // Still need fileSources for potential analysis
-        const result = await buildGraph(rootDir)
-        lastFileSources = result.fileSources
-        lastGraph = result.graph
+        lastGraph = graph
+        lastFileSources = await readFileSources(rootDir)
       } else if (
         cachedResult &&
         useGit &&
@@ -141,11 +148,9 @@ process.parentPort.on('message', async (e: Electron.MessageEvent) => {
         log(`Incremental parse: ${changedFiles.length} changed files since ${cachedResult.commitHash.slice(0, 8)}`)
 
         if (changedFiles.length === 0) {
-          // No .py files changed (maybe only non-Python changes)
           graph = cachedResult.graph
-          const result = await buildGraph(rootDir)
-          lastFileSources = result.fileSources
           lastGraph = graph
+          lastFileSources = await readFileSources(rootDir)
         } else {
           const result = await buildGraphIncremental(rootDir, cachedResult.graph, changedFiles)
           lastFileSources = result.fileSources
@@ -169,6 +174,18 @@ process.parentPort.on('message', async (e: Electron.MessageEvent) => {
       }
 
       setupWatcher(rootDir)
+
+      // Load cached analysis results if available
+      const cachedAnalysis = readAllCachedAnalysis(rootDir)
+      if (cachedAnalysis.project) {
+        send({ type: 'analysis:project', data: cachedAnalysis.project })
+      }
+      for (const [nodeId, analysis] of cachedAnalysis.nodes) {
+        send({ type: 'analysis:node', data: { nodeId, analysis } })
+      }
+      for (const [edgeId, analysis] of cachedAnalysis.edges) {
+        send({ type: 'analysis:edge', data: { edgeId, analysis } })
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message + '\n' + (err as Error).stack : String(err)
       log(`ERROR: ${message}`)

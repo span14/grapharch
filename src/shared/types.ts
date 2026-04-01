@@ -113,3 +113,4 @@ export type WorkerMessage =
   | { type: 'analysis:edge'; data: { edgeId: string; analysis: EdgeAnalysis } }
   | { type: 'analysis:project'; data: ProjectAnalysis }
   | { type: 'analysis:error'; data: { target: string; error: string } }
+  | { type: 'analysis:complete' }

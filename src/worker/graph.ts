@@ -111,6 +111,21 @@ export async function buildGraphIncremental(
   }
 }
 
+/**
+ * Read all Python file sources without parsing.
+ * Used when the graph cache is current but we need fileSources for analysis.
+ */
+export async function readFileSources(rootDir: string): Promise<Map<string, string>> {
+  const files = await discoverPythonFiles(rootDir)
+  const fileSources = new Map<string, string>()
+  for (const file of files) {
+    const rel = path.relative(rootDir, file)
+    const source = await fs.readFile(file, 'utf-8')
+    fileSources.set(rel, source)
+  }
+  return fileSources
+}
+
 export async function buildGraph(rootDir: string): Promise<BuildGraphResult> {
   const files = await discoverPythonFiles(rootDir)
   const allNodes: GraphNode[] = []

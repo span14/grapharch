@@ -4,6 +4,12 @@ import path from 'node:path'
 let worker: Electron.UtilityProcess | null = null
 
 export function setupIPC(mainWindow: BrowserWindow): void {
+  // Remove any previously registered handlers to avoid duplicate handler errors
+  // when setupIPC is called again (e.g., on macOS activate)
+  for (const channel of ['project:open', 'project:refresh', 'dialog:open-folder', 'analysis:start', 'analysis:cancel']) {
+    ipcMain.removeHandler(channel)
+  }
+
   // Spawn the worker utility process.
   // The Forge Vite plugin builds all `build` entries into `.vite/build/`.
   // The worker entry `src/worker/index.ts` is compiled to `worker.js`

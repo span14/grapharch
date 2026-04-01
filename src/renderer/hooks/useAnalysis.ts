@@ -17,12 +17,7 @@ export function useAnalysisIPC(): void {
   useEffect(() => {
     const unsubs = [
       window.grapharc.onAnalysisProgress((data) => {
-        const progress = data as AnalysisProgress
-        setProgress(progress)
-        // When edges phase completes, mark analysis as done
-        if (progress.phase === 'edges' && progress.done === progress.total) {
-          completeAnalysis()
-        }
+        setProgress(data as AnalysisProgress)
       }),
       window.grapharc.onAnalysisNode((data) => {
         const { nodeId, analysis } = data as { nodeId: string; analysis: NodeAnalysis }
@@ -38,6 +33,9 @@ export function useAnalysisIPC(): void {
       window.grapharc.onAnalysisError((data) => {
         const { target, error } = data as { target: string; error: string }
         setError(target, error)
+      }),
+      window.grapharc.onAnalysisComplete(() => {
+        completeAnalysis()
       }),
     ]
     return () => unsubs.forEach((fn) => fn())

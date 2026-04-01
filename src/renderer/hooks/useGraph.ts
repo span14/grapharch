@@ -20,6 +20,7 @@ declare global {
       onAnalysisEdge: (cb: (data: unknown) => void) => () => void
       onAnalysisProject: (cb: (data: unknown) => void) => () => void
       onAnalysisError: (cb: (data: unknown) => void) => () => void
+      onAnalysisComplete: (cb: () => void) => () => void
     }
   }
 }

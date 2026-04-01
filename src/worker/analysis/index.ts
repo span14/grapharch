@@ -75,6 +75,7 @@ export class AnalysisPipeline {
       writeManifest(rootDir, this.analyzedNodeIds, this.analyzedEdgeIds)
       const commitHash = getHeadCommit(rootDir)
       writeProjectAnalysis(rootDir, project, commitHash)
+      this.send({ type: 'analysis:complete' })
     }
   }
 
@@ -129,10 +130,8 @@ export class AnalysisPipeline {
       analyzedAt: new Date().toISOString(),
     }
 
-    // Cache layer assignments
+    // Cache individual layer assignments
     const rootDir = this.graph.metadata.rootDir
-    const commitHash = getHeadCommit(rootDir)
-    writeProjectAnalysis(rootDir, project, commitHash)
     for (const [moduleId, assignment] of Object.entries(result.moduleAnalysis)) {
       writeNodeAnalysis(rootDir, moduleId, {
         layer: assignment.layer,

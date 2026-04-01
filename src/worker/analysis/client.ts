@@ -30,8 +30,15 @@ export function callClaude(
 
     let stdout = ''
     let stderr = ''
+    const MAX_RESPONSE_BYTES = 10 * 1024 * 1024 // 10MB
 
-    proc.stdout.on('data', (data: Buffer) => { stdout += data.toString() })
+    proc.stdout.on('data', (data: Buffer) => {
+      stdout += data.toString()
+      if (stdout.length > MAX_RESPONSE_BYTES) {
+        proc.kill()
+        reject(new Error('Claude CLI response exceeded 10MB limit'))
+      }
+    })
     proc.stderr.on('data', (data: Buffer) => { stderr += data.toString() })
 
     proc.on('error', (err) => {

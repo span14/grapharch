@@ -44,7 +44,7 @@ export function getChangedFiles(
   try {
     const output = execFileSync(
       'git',
-      ['diff', '--name-only', '--diff-filter=ACMR', fromCommit, toCommit, '--', '*.py'],
+      ['diff', '--name-only', '--diff-filter=ACMRD', fromCommit, toCommit, '--', '*.py'],
       { cwd: dir, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }
     ).trim()
     if (!output) return []

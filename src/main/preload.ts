@@ -53,4 +53,9 @@ contextBridge.exposeInMainWorld('grapharc', {
     ipcRenderer.on('analysis:error', handler)
     return () => { ipcRenderer.removeListener('analysis:error', handler) }
   },
+  onAnalysisComplete: (cb: () => void) => {
+    const handler = () => cb()
+    ipcRenderer.on('analysis:complete', handler)
+    return () => { ipcRenderer.removeListener('analysis:complete', handler) }
+  },
 })
