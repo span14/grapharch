@@ -44,6 +44,7 @@ interface EdgeResponse {
 
 export class AnalysisPipeline {
   private cancelled = false
+  private currentCall: { abort: () => void } | null = null
 
   private analyzedNodeIds: string[] = []
   private analyzedEdgeIds: string[] = []
@@ -81,6 +82,8 @@ export class AnalysisPipeline {
 
   cancel(): void {
     this.cancelled = true
+    this.currentCall?.abort()
+    this.currentCall = null
   }
 
   // ── Phase A: Layers ──────────────────────────────────────────
@@ -99,7 +102,10 @@ export class AnalysisPipeline {
     })
 
     const prompt = buildLayerPrompt(modules, moduleEdges, this.fileSources)
-    const raw = await callClaude(LAYER_SYSTEM, prompt, this.model)
+    const call = callClaude(LAYER_SYSTEM, prompt, this.model)
+    this.currentCall = call
+    const raw = await call.promise
+    this.currentCall = null
     const result = parseJsonResponse<LayerResponse>(raw)
 
     // Send individual layer assignments
@@ -176,7 +182,10 @@ export class AnalysisPipeline {
       const prompt = buildFunctionPrompt(batch, this.graph.edges, this.fileSources, layerName)
 
       try {
-        const raw = await callClaude(FUNCTION_SYSTEM, prompt, this.model)
+        const call = callClaude(FUNCTION_SYSTEM, prompt, this.model)
+        this.currentCall = call
+        const raw = await call.promise
+        this.currentCall = null
         const result = parseJsonResponse<FunctionResponse>(raw)
 
         for (const node of batch) {
@@ -247,7 +256,10 @@ export class AnalysisPipeline {
       const prompt = buildEdgePrompt(batch, this.fileSources, layerMap)
 
       try {
-        const raw = await callClaude(EDGE_SYSTEM, prompt, this.model)
+        const call = callClaude(EDGE_SYSTEM, prompt, this.model)
+        this.currentCall = call
+        const raw = await call.promise
+        this.currentCall = null
         const result = parseJsonResponse<EdgeResponse>(raw)
 
         for (const { edge } of batch) {

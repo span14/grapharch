@@ -47,8 +47,6 @@ function send(msg: WorkerMessage): void {
 function graphsEqual(a: GraphData, b: GraphData): boolean {
   if (a.nodes.length !== b.nodes.length) return false
   if (a.edges.length !== b.edges.length) return false
-  if (a.metadata.parsedAt !== b.metadata.parsedAt) return false
-  // Check node IDs match (fast proxy for structural equality)
   const aIds = new Set(a.nodes.map((n) => n.id))
   for (const n of b.nodes) {
     if (!aIds.has(n.id)) return false
@@ -90,6 +88,7 @@ async function handleFileChange(
   if (currentAnalysis) {
     currentAnalysis.cancel()
     currentAnalysis = null
+    send({ type: 'analysis:complete' })
   }
 
   try {
@@ -254,6 +253,7 @@ process.parentPort.on('message', async (e: Electron.MessageEvent) => {
   if (msg.type === 'analysis:cancel') {
     currentAnalysis?.cancel()
     currentAnalysis = null
+    send({ type: 'analysis:complete' })
   }
 })
 

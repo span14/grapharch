@@ -253,7 +253,7 @@ export function Canvas() {
             return true
           })
           const nodeIds = new Set(flowNodes.map((n) => n.id))
-          flowEdges = result.edges.filter((e) => nodeIds.has(e.source) || nodeIds.has(e.target))
+          flowEdges = result.edges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target))
         } else {
           flowNodes = result.nodes
           flowEdges = result.edges
