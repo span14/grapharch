@@ -1,6 +1,8 @@
 import { useGraphIPC } from './hooks/useGraph'
 import { useGraphStore } from './stores/graphStore'
 import { Canvas } from './Canvas'
+import { DetailPanel } from './panels/DetailPanel'
+import { FilterBar } from './panels/FilterBar'
 import './styles.css'
 
 function App() {
@@ -25,9 +27,13 @@ function App() {
 
   return (
     <div className="app">
-      <div className="canvas-container">
-        <Canvas />
+      <div className="main-area">
+        <FilterBar />
+        <div className="canvas-container">
+          <Canvas />
+        </div>
       </div>
+      <DetailPanel />
     </div>
   )
 }

@@ -7,6 +7,8 @@ interface GraphState {
   expandedModules: Set<string>
   loading: boolean
   error: string | null
+  searchQuery: string
+  visibleEdgeKinds: Set<string>
 
   setGraph: (data: GraphData) => void
   applyDiff: (diff: GraphDiff) => void
@@ -14,6 +16,8 @@ interface GraphState {
   toggleModule: (id: string) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
+  setSearchQuery: (q: string) => void
+  toggleEdgeKind: (kind: string) => void
 }
 
 export const useGraphStore = create<GraphState>((set) => ({
@@ -22,6 +26,8 @@ export const useGraphStore = create<GraphState>((set) => ({
   expandedModules: new Set(),
   loading: false,
   error: null,
+  searchQuery: '',
+  visibleEdgeKinds: new Set(['import', 'call', 'import_unresolved']),
 
   setGraph: (data) => set({ graph: data, loading: false, error: null }),
   applyDiff: (diff) =>
@@ -62,4 +68,12 @@ export const useGraphStore = create<GraphState>((set) => ({
     }),
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error }),
+  setSearchQuery: (q) => set({ searchQuery: q }),
+  toggleEdgeKind: (kind) =>
+    set((state) => {
+      const next = new Set(state.visibleEdgeKinds)
+      if (next.has(kind)) next.delete(kind)
+      else next.add(kind)
+      return { visibleEdgeKinds: next }
+    }),
 }))
