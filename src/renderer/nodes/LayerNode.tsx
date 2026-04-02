@@ -6,12 +6,13 @@ export type LayerNodeData = {
   modules: string[]
   moduleCount: number
   onClick: () => void
+  selected?: boolean
 }
 
 export function LayerNode({ data }: NodeProps<Node<LayerNodeData>>) {
   return (
     <div
-      className="node node-layer"
+      className={`node node-layer ${data.selected ? 'node-selected' : ''}`}
       style={{ borderColor: data.color, borderLeftColor: data.color, borderLeftWidth: 4 }}
       onClick={data.onClick}
     >

@@ -6,6 +6,12 @@ const COUPLING_COLORS: Record<string, string> = {
   tight: '#ef4444',
 }
 
+const COUPLING_MARKERS: Record<string, string> = {
+  loose: 'url(#arrow-green)',
+  moderate: 'url(#arrow-yellow)',
+  tight: 'url(#arrow-red)',
+}
+
 export function CallEdge(props: EdgeProps) {
   const [path, labelX, labelY] = getSmoothStepPath(props)
   const data = props.data as Record<string, unknown> | undefined
@@ -23,7 +29,7 @@ export function CallEdge(props: EdgeProps) {
       <BaseEdge
         path={path}
         style={{ stroke: color, strokeWidth }}
-        markerEnd="url(#arrow)"
+        markerEnd={coupling && coupling in COUPLING_MARKERS ? COUPLING_MARKERS[coupling] : 'url(#arrow)'}
       />
       {passedType && (
         <EdgeLabelRenderer>

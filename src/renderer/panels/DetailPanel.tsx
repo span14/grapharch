@@ -50,7 +50,7 @@ export function DetailPanel() {
 
           <div className="detail-row">
             <span className="detail-key">Complexity</span>
-            <span className={`detail-complexity complexity-${fnAnalysis.complexity}`}>
+            <span className={`detail-complexity-pill complexity-bg-${fnAnalysis.complexity}`}>
               {fnAnalysis.complexity}
             </span>
           </div>

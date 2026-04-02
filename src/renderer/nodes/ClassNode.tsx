@@ -5,11 +5,12 @@ export type ClassNodeData = {
   methodCount: number
   summary?: string
   complexity?: 'low' | 'medium' | 'high'
+  selected?: boolean
 }
 
 export function ClassNode({ data }: NodeProps<Node<ClassNodeData>>) {
   return (
-    <div className="node node-class">
+    <div className={`node node-class ${data.selected ? 'node-selected' : ''}`}>
       <Handle type="target" position={Position.Top} />
       <div className="node-header">
         {data.complexity && (

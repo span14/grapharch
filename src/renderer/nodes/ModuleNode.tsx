@@ -7,12 +7,13 @@ export type ModuleNodeData = {
   onToggle: () => void
   layerName?: string
   layerColor?: string
+  selected?: boolean
 }
 
 export function ModuleNode({ data }: NodeProps<Node<ModuleNodeData>>) {
   return (
     <div
-      className={`node node-module ${data.expanded ? 'expanded' : ''}`}
+      className={`node node-module ${data.expanded ? 'expanded' : ''} ${data.selected ? 'node-selected' : ''}`}
       style={data.layerColor ? { borderLeftColor: data.layerColor, borderLeftWidth: 4 } : undefined}
     >
       <Handle type="target" position={Position.Top} />

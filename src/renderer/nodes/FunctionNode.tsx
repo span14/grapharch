@@ -9,11 +9,12 @@ export type FunctionNodeData = {
   complexity?: 'low' | 'medium' | 'high'
   parameters?: ParameterInfo[]
   returnType?: string
+  selected?: boolean
 }
 
 export function FunctionNode({ data }: NodeProps<Node<FunctionNodeData>>) {
   return (
-    <div className="node node-fn-card">
+    <div className={`node node-fn-card ${data.selected ? 'node-selected' : ''}`}>
       <Handle type="target" position={Position.Top} />
       <div className="fn-card-header">
         {data.complexity && (

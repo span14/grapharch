@@ -111,6 +111,7 @@ function graphToFlow(
   nodeAnalyses: Map<string, NodeAnalysis>,
   edgeAnalyses: Map<string, EdgeAnalysis>,
   projectAnalysis: ProjectAnalysis | null,
+  selectedNodeId: string | null,
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = []
   const edges: Edge[] = []
@@ -141,6 +142,7 @@ function graphToFlow(
           onToggle: () => onToggle(n.id),
           layerName: layer?.layer,
           layerColor: layerColors.get(n.id),
+          selected: n.id === selectedNodeId,
         },
         ...(expanded
           ? { style: { width: 350, height: 300 } }
@@ -175,6 +177,7 @@ function graphToFlow(
           complexity: analysis?.complexity,
           parameters: analysis?.parameters,
           returnType: analysis?.returnType,
+          selected: n.id === selectedNodeId,
         },
       })
     }
@@ -194,6 +197,7 @@ function graphToFlow(
           weight: e.weight,
           passedType: edgeAn?.passedType,
           coupling: edgeAn?.coupling,
+          kind: e.kind,
         },
       })
     }
@@ -207,6 +211,7 @@ export function Canvas() {
   const expandedModules = useGraphStore((s) => s.expandedModules)
   const toggleModule = useGraphStore((s) => s.toggleModule)
   const selectNode = useGraphStore((s) => s.selectNode)
+  const selectedNodeId = useGraphStore((s) => s.selectedNodeId)
   const nodeAnalyses = useAnalysisStore((s) => s.nodeAnalyses)
   const edgeAnalyses = useAnalysisStore((s) => s.edgeAnalyses)
   const projectAnalysis = useAnalysisStore((s) => s.projectAnalysis)
@@ -240,6 +245,7 @@ export function Canvas() {
         nodeAnalyses,
         edgeAnalyses,
         projectAnalysis,
+        selectedNodeId,
       )
       // If a layer is selected, filter to only that layer's modules
       if (selectedLayer && projectAnalysis) {
@@ -270,7 +276,7 @@ export function Canvas() {
       setEdges(flowEdges)
       setLayoutDone(true)
     })
-  }, [graph, expandedModules, toggleModule, nodeAnalyses, edgeAnalyses, projectAnalysis, viewLevel, selectedLayer, setViewLevel, selectLayerFn, setNodes, setEdges])
+  }, [graph, expandedModules, toggleModule, nodeAnalyses, edgeAnalyses, projectAnalysis, viewLevel, selectedLayer, setViewLevel, selectLayerFn, setNodes, setEdges, selectedNodeId])
 
   const onNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
@@ -320,6 +326,22 @@ export function Canvas() {
             <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5"
               markerWidth="8" markerHeight="8" orient="auto-start-reverse">
               <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6" />
+            </marker>
+            <marker id="arrow-gray" viewBox="0 0 10 10" refX="10" refY="5"
+              markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b" />
+            </marker>
+            <marker id="arrow-red" viewBox="0 0 10 10" refX="10" refY="5"
+              markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444" />
+            </marker>
+            <marker id="arrow-green" viewBox="0 0 10 10" refX="10" refY="5"
+              markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#22c55e" />
+            </marker>
+            <marker id="arrow-yellow" viewBox="0 0 10 10" refX="10" refY="5"
+              markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#eab308" />
             </marker>
           </defs>
         </svg>
