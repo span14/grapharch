@@ -85,6 +85,7 @@ export interface ComponentDefinition {
   pseudocode: string          // step-by-step pseudocode of what this component does
   description: string         // one-line summary
   functions: string[]         // function/class IDs belonging to this component
+  output?: TypeDetail         // what this component produces
 }
 
 export interface ComponentEdge {
@@ -94,11 +95,17 @@ export interface ComponentEdge {
   description: string         // what data flows and why
 }
 
+export interface TypeDetail {
+  type: string                // e.g. "MatchResult", "List[Event]"
+  interpretation: string      // what this type represents
+  codeReference?: string      // e.g. "src/pairing/models.py:42"
+}
+
 export interface LayerEdge {
   source: string              // source layer name
   target: string              // target layer name
   description: string         // abstract interpretation, e.g. "Sends matched events for storage"
-  dataFormats: string[]       // concrete types, e.g. ["List[Event]", "Config"]
+  dataFormats: TypeDetail[]   // concrete types with interpretation
 }
 
 export interface LayerDefinition {

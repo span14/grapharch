@@ -13,10 +13,8 @@ export type LayerNodeData = {
 export function LayerNode({ data }: NodeProps<Node<LayerNodeData>>) {
   const handleClick = (e: React.MouseEvent) => {
     if (e.detail === 2) {
-      // Double click — drill down into layer
       data.onDrillDown()
     } else {
-      // Single click — select and show interpretation
       data.onSelect()
     }
   }

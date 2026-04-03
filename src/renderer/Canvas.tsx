@@ -86,17 +86,27 @@ function layersToFlow(
 
   // Use AI-interpreted layer edges if available
   if (project.layerEdges && project.layerEdges.length > 0) {
-    const edges: Edge[] = project.layerEdges.map((le, i) => ({
-      id: `layer-edge-${i}`,
-      source: `layer:${le.source}`,
-      target: `layer:${le.target}`,
-      type: 'call',
-      data: {
-        weight: 1,
-        passedType: le.description,
-        passedTypes: le.dataFormats,
-      },
-    }))
+    const edges: Edge[] = project.layerEdges.map((le, i) => {
+      // Build tooltip with type interpretations
+      const typeStrs = le.dataFormats.map((df) => {
+        if (typeof df === 'string') return df // backward compat
+        let s = df.type
+        if (df.interpretation) s += ` — ${df.interpretation}`
+        if (df.codeReference) s += ` (${df.codeReference})`
+        return s
+      })
+      return {
+        id: `layer-edge-${i}`,
+        source: `layer:${le.source}`,
+        target: `layer:${le.target}`,
+        type: 'call',
+        data: {
+          weight: 1,
+          passedType: le.description,
+          passedTypes: typeStrs,
+        },
+      }
+    })
     return { nodes, edges }
   }
 
@@ -166,6 +176,7 @@ function layerComponentsToFlow(
       description: comp.description,
       pseudocode: comp.pseudocode,
       functionCount: comp.functions.length,
+      output: comp.output,
       selected: `comp:${layerName}:${comp.name}` === selectedNodeId,
     },
   }))

@@ -16,7 +16,8 @@ Rules:
 - Layers represent responsibility boundaries — use the project's domain language, not generic CS terms
 - Every module in the graph must be assigned to exactly one layer
 - Provide a distinct hex color for each layer suitable for dark backgrounds
-- For layerEdges: describe WHAT data flows between layers and WHY at an abstract level
+- For each layer's "outputs": list the key data types this layer produces. For non-builtin types (not str/int/float/bool/list/dict/None), include an interpretation of what the type represents and the file:line where it's defined
+- For layerEdges: describe WHAT data flows between layers and WHY at an abstract level. dataFormats must include type interpretation and codeReference for non-builtin types
 - Only include layerEdges where there is a real dependency
 - Output ONLY valid JSON, no markdown fences, no commentary`
 
@@ -34,6 +35,8 @@ Rules:
 - Each component must have a clear, domain-specific name
 - Pseudocode must be algorithmic (step-by-step), not a description
 - Every listed function must belong to exactly one component
+- Each component must have an "output" field describing what it produces. For non-builtin types (not str/int/float/bool/list/dict/None), include interpretation and codeReference (file:line where the type is defined)
+- CRITICAL: The component output.type and the componentEdge dataFormat for that component MUST be the exact same type string. If a component outputs "List[dict]", its output.type must be "List[dict]" and any edge from it must use "List[dict]" as dataFormat — not "dict" or any variation
 - Component edges describe data that flows between components with concrete types
 - Output ONLY valid JSON, no markdown fences, no commentary`
 
@@ -136,7 +139,13 @@ ${callStr || '  (no cross-module calls)'}
       "source": "SourceLayerName",
       "target": "TargetLayerName",
       "description": "Abstract description of what flows and why",
-      "dataFormats": ["List[Event]", "MatchResult"]
+      "dataFormats": [
+        {
+          "type": "List[MatchResult]",
+          "interpretation": "Matched event pairs with scores for persistence",
+          "codeReference": "src/models.py:42"
+        }
+      ]
     }
   ],
   "moduleAnalysis": {
@@ -196,7 +205,12 @@ ${edgeStr}
       "name": "ComponentName",
       "description": "One-line summary of responsibility",
       "pseudocode": "1. Load configuration\\n2. For each event:\\n   a. Extract features\\n   b. Match against index\\n3. Return matched pairs",
-      "functions": ["module.py::func1", "module.py::func2"]
+      "functions": ["module.py::func1", "module.py::func2"],
+      "output": {
+        "type": "List[MatchResult]",
+        "interpretation": "Paired matches with confidence scores and metadata",
+        "codeReference": "src/models.py:42"
+      }
     }
   ],
   "componentEdges": [
