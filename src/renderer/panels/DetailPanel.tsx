@@ -5,6 +5,68 @@ import {
   isFunctionAnalysis,
 } from '../stores/analysisStore'
 
+function LayerDetail({ layerName }: { layerName: string }) {
+  const projectAnalysis = useAnalysisStore((s) => s.projectAnalysis)
+  const nodeAnalyses = useAnalysisStore((s) => s.nodeAnalyses)
+
+  if (!projectAnalysis) return null
+  const layer = projectAnalysis.layers.find((l) => l.name === layerName)
+  if (!layer) return null
+
+  return (
+    <div className="detail-panel">
+      <CloseButton />
+      <div className="detail-header">
+        <span className="detail-kind" style={{ background: layer.color }}>{layerName}</span>
+        <h3>{layerName}</h3>
+      </div>
+
+      <div className="detail-section">
+        <h4>Summary</h4>
+        <p className="detail-summary">{projectAnalysis.summary}</p>
+      </div>
+
+      {projectAnalysis.patterns.length > 0 && (
+        <div className="detail-section">
+          <h4>Patterns</h4>
+          <div className="analysis-patterns">
+            {projectAnalysis.patterns.map((p, i) => (
+              <span key={i} className="analysis-pattern-tag">{p}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="detail-section">
+        <h4>Modules ({layer.modules.length})</h4>
+        {layer.modules.map((mod) => {
+          const analysis = nodeAnalyses.get(mod)
+          const la = analysis && isLayerAssignment(analysis) ? analysis : null
+          return (
+            <div key={mod} className="detail-edge" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+              <span style={{ fontWeight: 500 }}>{mod.split('/').pop()}</span>
+              {la && (
+                <span className="detail-reasoning" style={{ fontSize: 10 }}>
+                  {la.reasoning} ({Math.round(la.confidence * 100)}%)
+                </span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      <p style={{ fontSize: 11, opacity: 0.4, marginTop: 12 }}>Double-click layer to view components</p>
+    </div>
+  )
+}
+
+function CloseButton() {
+  const selectNode = useGraphStore((s) => s.selectNode)
+  return (
+    <button className="detail-close" onClick={() => selectNode(null)} title="Close panel">&times;</button>
+  )
+}
+
 export function DetailPanel() {
   const selectedNodeId = useGraphStore((s) => s.selectedNodeId)
   const graph = useGraphStore((s) => s.graph)
@@ -12,6 +74,45 @@ export function DetailPanel() {
   const edgeAnalyses = useAnalysisStore((s) => s.edgeAnalyses)
 
   if (!selectedNodeId || !graph) return null
+
+  // Handle layer node selection
+  if (selectedNodeId.startsWith('layer:')) {
+    return <LayerDetail layerName={selectedNodeId.slice(6)} />
+  }
+
+  // Handle component node selection
+  if (selectedNodeId.startsWith('comp:')) {
+    const parts = selectedNodeId.split(':')
+    const layerName = parts[1]
+    const compName = parts.slice(2).join(':')
+    const projectAnalysis = useAnalysisStore.getState().projectAnalysis
+    const layer = projectAnalysis?.layers.find((l) => l.name === layerName)
+    const comp = layer?.components?.find((c) => c.name === compName)
+    if (!comp) return null
+    return (
+      <div className="detail-panel">
+        <CloseButton />
+        <div className="detail-header">
+          <span className="detail-kind kind-function">component</span>
+          <h3>{comp.name}</h3>
+        </div>
+        <div className="detail-section">
+          <h4>Description</h4>
+          <p className="detail-summary">{comp.description}</p>
+        </div>
+        <div className="detail-section">
+          <h4>Pseudocode</h4>
+          <pre className="detail-code">{comp.pseudocode}</pre>
+        </div>
+        <div className="detail-section">
+          <h4>Functions ({comp.functions.length})</h4>
+          {comp.functions.map((f) => (
+            <div key={f} style={{ fontSize: 12, padding: '2px 0', opacity: 0.7 }}>{f.split('::').pop()}</div>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   const node = graph.nodes.find((n) => n.id === selectedNodeId)
   if (!node) return null
@@ -25,6 +126,7 @@ export function DetailPanel() {
 
   return (
     <div className="detail-panel">
+      <CloseButton />
       <div className="detail-header">
         <span className={`detail-kind kind-${node.kind}`}>{node.kind}</span>
         <h3>{node.label}</h3>

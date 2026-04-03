@@ -9,6 +9,7 @@ export type FunctionNodeData = {
   complexity?: 'low' | 'medium' | 'high'
   parameters?: ParameterInfo[]
   returnType?: string
+  codePreview?: string
   selected?: boolean
 }
 
@@ -43,6 +44,14 @@ export function FunctionNode({ data }: NodeProps<Node<FunctionNodeData>>) {
         <div className="fn-card-section fn-card-out">
           <span className="fn-card-label">OUT</span>
           <span className="fn-param-type">{data.returnType}</span>
+        </div>
+      )}
+      {data.codePreview && (
+        <div className="fn-card-code">
+          <pre className="fn-card-code-pre">
+            {data.codePreview.split('\n').slice(0, 8).join('\n')}
+            {data.codePreview.split('\n').length > 8 ? '\n…' : ''}
+          </pre>
         </div>
       )}
       <Handle type="source" position={Position.Bottom} />

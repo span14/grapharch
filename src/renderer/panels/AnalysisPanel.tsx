@@ -10,6 +10,7 @@ const MODELS = [
 export function AnalysisPanel() {
   const graph = useGraphStore((s) => s.graph)
   const status = useAnalysisStore((s) => s.status)
+  const cacheProgress = useAnalysisStore((s) => s.cacheProgress)
   const progress = useAnalysisStore((s) => s.progress)
   const error = useAnalysisStore((s) => s.error)
   const projectAnalysis = useAnalysisStore((s) => s.projectAnalysis)
@@ -64,13 +65,27 @@ export function AnalysisPanel() {
         )}
       </div>
 
+      {/* Cache loading */}
+      {status === 'loading' && cacheProgress && (
+        <div className="analysis-section">
+          <div className="analysis-progress-label">
+            Loading cache... {cacheProgress.done}/{cacheProgress.total}
+          </div>
+          <div className="analysis-progress-bar">
+            <div
+              className="analysis-progress-fill"
+              style={{ width: `${(cacheProgress.done / cacheProgress.total) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Progress */}
       {status === 'running' && progress && (
         <div className="analysis-section">
           <div className="analysis-progress-label">
-            {progress.phase === 'layers' && 'Analyzing layers...'}
-            {progress.phase === 'functions' && `Functions ${progress.done}/${progress.total}`}
-            {progress.phase === 'edges' && `Edges ${progress.done}/${progress.total}`}
+            {progress.phase === 'layers' && 'Analyzing architecture...'}
+            {progress.phase === 'components' && `Components ${progress.done}/${progress.total}`}
           </div>
           <div className="analysis-progress-bar">
             <div

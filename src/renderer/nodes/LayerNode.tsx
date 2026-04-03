@@ -5,16 +5,27 @@ export type LayerNodeData = {
   color: string
   modules: string[]
   moduleCount: number
-  onClick: () => void
+  onSelect: () => void
+  onDrillDown: () => void
   selected?: boolean
 }
 
 export function LayerNode({ data }: NodeProps<Node<LayerNodeData>>) {
+  const handleClick = (e: React.MouseEvent) => {
+    if (e.detail === 2) {
+      // Double click — drill down into layer
+      data.onDrillDown()
+    } else {
+      // Single click — select and show interpretation
+      data.onSelect()
+    }
+  }
+
   return (
     <div
       className={`node node-layer ${data.selected ? 'node-selected' : ''}`}
       style={{ borderColor: data.color, borderLeftColor: data.color, borderLeftWidth: 4 }}
-      onClick={data.onClick}
+      onClick={handleClick}
     >
       <Handle type="target" position={Position.Top} />
       <div className="layer-header">
@@ -23,7 +34,7 @@ export function LayerNode({ data }: NodeProps<Node<LayerNodeData>>) {
       </div>
       <div className="layer-modules">
         {data.modules.map((m) => (
-          <div key={m} className="layer-module-item">{m}</div>
+          <div key={m} className="layer-module-item">{m.split('/').pop()}</div>
         ))}
       </div>
       <div className="layer-count">{data.moduleCount} modules</div>

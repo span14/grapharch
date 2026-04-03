@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ReactFlow,
   Background,
@@ -6,6 +6,8 @@ import {
   MiniMap,
   useNodesState,
   useEdgesState,
+  useReactFlow,
+  useNodesInitialized,
   type Node,
   type Edge,
 } from '@xyflow/react'
@@ -24,12 +26,14 @@ import { LayerNode } from './nodes/LayerNode'
 import { FunctionNode } from './nodes/FunctionNode'
 import { ClassNode } from './nodes/ClassNode'
 import { MethodNode } from './nodes/MethodNode'
+import { ComponentNode } from './nodes/ComponentNode'
 import { ImportEdge } from './edges/ImportEdge'
 import { CallEdge } from './edges/CallEdge'
 
 // Defined outside the component to maintain stable references for React Flow
 const nodeTypes = {
   layer: LayerNode,
+  component: ComponentNode,
   module: ModuleNode,
   function: FunctionNode,
   class: ClassNode,
@@ -54,7 +58,9 @@ function getModuleId(node: GNode, allNodes: GNode[]): string {
 function layersToFlow(
   project: ProjectAnalysis,
   graph: GraphData,
-  onLayerClick: (layer: string) => void,
+  edgeAnalyses: Map<string, EdgeAnalysis>,
+  onLayerSelect: (layer: string) => void,
+  onLayerDrillDown: (layer: string) => void,
 ): { nodes: Node[]; edges: Edge[] } {
   const nodes: Node[] = project.layers.map((layer) => ({
     id: `layer:${layer.name}`,
@@ -65,7 +71,8 @@ function layersToFlow(
       color: layer.color,
       modules: layer.modules,
       moduleCount: layer.modules.length,
-      onClick: () => onLayerClick(layer.name),
+      onSelect: () => onLayerSelect(layer.name),
+      onDrillDown: () => onLayerDrillDown(layer.name),
     },
   }))
 
@@ -77,29 +84,105 @@ function layersToFlow(
     }
   }
 
-  // Create edges between layers from cross-layer module edges
-  const layerEdgeCounts = new Map<string, number>()
+  // Use AI-interpreted layer edges if available
+  if (project.layerEdges && project.layerEdges.length > 0) {
+    const edges: Edge[] = project.layerEdges.map((le, i) => ({
+      id: `layer-edge-${i}`,
+      source: `layer:${le.source}`,
+      target: `layer:${le.target}`,
+      type: 'call',
+      data: {
+        weight: 1,
+        passedType: le.description,
+        passedTypes: le.dataFormats,
+      },
+    }))
+    return { nodes, edges }
+  }
+
+  // Fallback: aggregate from raw graph edges
+  const layerEdgeData = new Map<string, { count: number; edgeIds: string[] }>()
   for (const e of graph.edges) {
     const srcLayer = moduleToLayer.get(e.source)
     const tgtLayer = moduleToLayer.get(e.target)
     if (srcLayer && tgtLayer && srcLayer !== tgtLayer) {
       const key = `${srcLayer}|${tgtLayer}`
-      layerEdgeCounts.set(key, (layerEdgeCounts.get(key) ?? 0) + 1)
+      const entry = layerEdgeData.get(key) ?? { count: 0, edgeIds: [] }
+      entry.count++
+      entry.edgeIds.push(e.id)
+      layerEdgeData.set(key, entry)
     }
   }
 
+  const couplingRank: Record<string, number> = { loose: 0, moderate: 1, tight: 2 }
+  const couplingFromRank = ['loose', 'moderate', 'tight']
+
   const edges: Edge[] = []
   let idx = 0
-  for (const [key, count] of layerEdgeCounts) {
+  for (const [key, data] of layerEdgeData) {
     const [src, tgt] = key.split('|')
+    const passedTypes = new Set<string>()
+    let worstCoupling = 0
+    for (const edgeId of data.edgeIds) {
+      const ea = edgeAnalyses.get(edgeId)
+      if (ea?.passedType) passedTypes.add(ea.passedType)
+      if (ea?.coupling && couplingRank[ea.coupling] > worstCoupling) {
+        worstCoupling = couplingRank[ea.coupling]
+      }
+    }
     edges.push({
       id: `layer-edge-${idx++}`,
       source: `layer:${src}`,
       target: `layer:${tgt}`,
       type: 'call',
-      data: { weight: count },
+      data: {
+        weight: data.count,
+        passedTypes: [...passedTypes],
+        coupling: passedTypes.size > 0 ? couplingFromRank[worstCoupling] : undefined,
+      },
     })
   }
+
+  return { nodes, edges }
+}
+
+function layerComponentsToFlow(
+  layerName: string,
+  project: ProjectAnalysis,
+  selectedNodeId: string | null,
+): { nodes: Node[]; edges: Edge[] } {
+  const layerDef = project.layers.find((l) => l.name === layerName)
+  if (!layerDef || !layerDef.components || layerDef.components.length === 0) {
+    return { nodes: [], edges: [] }
+  }
+
+  // Create a node for each AI-identified component
+  const nodes: Node[] = layerDef.components.map((comp) => ({
+    id: `comp:${layerName}:${comp.name}`,
+    type: 'component' as const,
+    position: { x: 0, y: 0 },
+    data: {
+      label: comp.name,
+      description: comp.description,
+      pseudocode: comp.pseudocode,
+      functionCount: comp.functions.length,
+      selected: `comp:${layerName}:${comp.name}` === selectedNodeId,
+    },
+  }))
+
+  // Create edges between components
+  const edges: Edge[] = (layerDef.componentEdges ?? []).map((ce, i) => ({
+    id: `comp-edge-${layerName}-${i}`,
+    source: `comp:${layerName}:${ce.source}`,
+    target: `comp:${layerName}:${ce.target}`,
+    type: 'call' as const,
+    data: {
+      weight: 1,
+      passedType: ce.dataFormat,
+      coupling: undefined,
+      kind: 'call',
+    },
+  }))
 
   return { nodes, edges }
 }
@@ -215,6 +298,7 @@ export function Canvas() {
   const nodeAnalyses = useAnalysisStore((s) => s.nodeAnalyses)
   const edgeAnalyses = useAnalysisStore((s) => s.edgeAnalyses)
   const projectAnalysis = useAnalysisStore((s) => s.projectAnalysis)
+  const analysisStatus = useAnalysisStore((s) => s.status)
   const viewLevel = useAnalysisStore((s) => s.viewLevel)
   const selectedLayer = useAnalysisStore((s) => s.selectedLayer)
   const setViewLevel = useAnalysisStore((s) => s.setViewLevel)
@@ -222,7 +306,9 @@ export function Canvas() {
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([] as Node[])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([] as Edge[])
-  const [layoutDone, setLayoutDone] = useState(false)
+  const { fitView } = useReactFlow()
+  const nodesInitialized = useNodesInitialized()
+  const [layoutVersion, setLayoutVersion] = useState(0)
 
   useEffect(() => {
     if (!graph) return
@@ -231,67 +317,66 @@ export function Canvas() {
     let flowEdges: Edge[]
 
     if (viewLevel === 'layers' && projectAnalysis) {
-      const result = layersToFlow(projectAnalysis, graph, (layerName) => {
-        selectLayerFn(layerName)
-        setViewLevel('modules')
-      })
+      const result = layersToFlow(
+        projectAnalysis,
+        graph,
+        edgeAnalyses,
+        (layerName) => selectNode(`layer:${layerName}`),
+        (layerName) => { selectLayerFn(layerName); setViewLevel('components') },
+      )
+      flowNodes = result.nodes
+      flowEdges = result.edges
+    } else if (viewLevel === 'components' && selectedLayer && projectAnalysis) {
+      const result = layerComponentsToFlow(
+        selectedLayer, projectAnalysis, null,
+      )
       flowNodes = result.nodes
       flowEdges = result.edges
     } else {
+      // Fallback: module view (no analysis)
       const result = graphToFlow(
-        graph,
-        expandedModules,
-        toggleModule,
-        nodeAnalyses,
-        edgeAnalyses,
-        projectAnalysis,
-        selectedNodeId,
+        graph, expandedModules, toggleModule,
+        nodeAnalyses, edgeAnalyses, projectAnalysis, null,
       )
-      // If a layer is selected, filter to only that layer's modules
-      if (selectedLayer && projectAnalysis) {
-        const layerDef = projectAnalysis.layers.find((l) => l.name === selectedLayer)
-        if (layerDef) {
-          const layerModuleIds = new Set(layerDef.modules)
-          flowNodes = result.nodes.filter((n) => {
-            if (n.type === 'module') return layerModuleIds.has(n.id)
-            // Keep child nodes if their parent module is in the layer
-            if (n.parentId) return layerModuleIds.has(n.parentId as string)
-            return true
-          })
-          const nodeIds = new Set(flowNodes.map((n) => n.id))
-          flowEdges = result.edges.filter((e) => nodeIds.has(e.source) && nodeIds.has(e.target))
-        } else {
-          flowNodes = result.nodes
-          flowEdges = result.edges
-        }
-      } else {
-        flowNodes = result.nodes
-        flowEdges = result.edges
-      }
+      flowNodes = result.nodes
+      flowEdges = result.edges
     }
 
     // Run ELK layout
     computeLayout(flowNodes, flowEdges).then((layouted) => {
       setNodes(layouted)
       setEdges(flowEdges)
-      setLayoutDone(true)
+      setLayoutVersion((v) => v + 1)
     })
-  }, [graph, expandedModules, toggleModule, nodeAnalyses, edgeAnalyses, projectAnalysis, viewLevel, selectedLayer, setViewLevel, selectLayerFn, setNodes, setEdges, selectedNodeId])
+    // NOTE: selectedNodeId intentionally excluded — selection should not trigger re-layout
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [graph, expandedModules, toggleModule, nodeAnalyses, edgeAnalyses, projectAnalysis, viewLevel, selectedLayer, setViewLevel, selectLayerFn, setNodes, setEdges])
+
+  // Auto-fit viewport once nodes are measured after layout
+  const lastFitVersion = useRef(0)
+  useEffect(() => {
+    if (nodesInitialized && layoutVersion > 0 && layoutVersion !== lastFitVersion.current) {
+      lastFitVersion.current = layoutVersion
+      fitView({ padding: 0.12 })
+    }
+  }, [nodesInitialized, layoutVersion, fitView])
 
   const onNodeClick = useCallback(
     (_event: React.MouseEvent, node: Node) => {
-      selectNode(node.id)
+      // Toggle: clicking the same node again deselects it
+      selectNode(selectedNodeId === node.id ? null : node.id)
     },
-    [selectNode]
+    [selectNode, selectedNodeId]
   )
 
   if (!graph) return null
+  if (analysisStatus === 'loading') return null
 
   const breadcrumbs: Array<{ label: string; onClick: () => void }> = [
     { label: 'Layers', onClick: () => { setViewLevel('layers'); selectLayerFn(null) } },
   ]
   if (selectedLayer) {
-    breadcrumbs.push({ label: selectedLayer, onClick: () => { setViewLevel('modules') } })
+    breadcrumbs.push({ label: selectedLayer, onClick: () => { setViewLevel('components') } })
   }
 
   return (
@@ -314,7 +399,6 @@ export function Canvas() {
         onNodeClick={onNodeClick}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        fitView={layoutDone}
         minZoom={0.1}
         maxZoom={2}
       >

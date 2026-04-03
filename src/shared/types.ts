@@ -80,21 +80,45 @@ export interface EdgeAnalysis {
   passedType: string  // concrete Python type on the edge, e.g. "List[Event]"
 }
 
+export interface ComponentDefinition {
+  name: string
+  pseudocode: string          // step-by-step pseudocode of what this component does
+  description: string         // one-line summary
+  functions: string[]         // function/class IDs belonging to this component
+}
+
+export interface ComponentEdge {
+  source: string              // component name
+  target: string              // component name
+  dataFormat: string          // e.g. "List[Event]", "Config dict"
+  description: string         // what data flows and why
+}
+
+export interface LayerEdge {
+  source: string              // source layer name
+  target: string              // target layer name
+  description: string         // abstract interpretation, e.g. "Sends matched events for storage"
+  dataFormats: string[]       // concrete types, e.g. ["List[Event]", "Config"]
+}
+
 export interface LayerDefinition {
   name: string
   color: string
   modules: string[]
+  components?: ComponentDefinition[]
+  componentEdges?: ComponentEdge[]
 }
 
 export interface ProjectAnalysis {
   layers: LayerDefinition[]
+  layerEdges?: LayerEdge[]
   summary: string
   patterns: string[]
   analyzedAt: string
 }
 
 export interface AnalysisProgress {
-  phase: 'layers' | 'functions' | 'edges'
+  phase: 'layers' | 'components'
   total: number
   done: number
 }
@@ -114,3 +138,4 @@ export type WorkerMessage =
   | { type: 'analysis:project'; data: ProjectAnalysis }
   | { type: 'analysis:error'; data: { target: string; error: string } }
   | { type: 'analysis:complete' }
+  | { type: 'analysis:cache-loading'; data: { total: number; done: number } }

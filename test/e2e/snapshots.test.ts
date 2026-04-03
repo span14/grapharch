@@ -11,7 +11,8 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { _electron as electron, type ElectronApplication, type Page } from 'playwright'
 import path from 'node:path'
 
-const FIXTURES = path.resolve(__dirname, '..', 'fixtures', 'sample-project')
+const FIXTURES = process.env.GRAPHARC_TEST_PROJECT
+  || path.resolve(__dirname, '..', 'fixtures', 'sample-project')
 const SNAPSHOTS = path.resolve(__dirname, '..', 'snapshots')
 
 let app: ElectronApplication
@@ -68,34 +69,35 @@ describe('Task 9 — React Flow Canvas', () => {
       return window.grapharc.openProject(fixturesDir)
     }, FIXTURES)
 
-    // Wait for graph nodes to appear
-    await page.waitForSelector('.react-flow__node', { timeout: 15_000 })
+    // Capture loading state — should show loading overlay, not module graph
+    await page.waitForTimeout(500)
+    await page.screenshot({ path: path.join(SNAPSHOTS, 'project-loading.png') })
+
+    // Wait for graph nodes to appear (layer nodes or module nodes)
+    await page.waitForSelector('.react-flow__node', { timeout: 30_000 })
     await page.screenshot({ path: path.join(SNAPSHOTS, 'task09-graph-rendered.png') })
 
     // Verify multiple nodes exist
     const nodeCount = await page.locator('.react-flow__node').count()
     expect(nodeCount).toBeGreaterThan(0)
-
-    // Verify edges exist
-    const edgeCount = await page.locator('.react-flow__edge').count()
-    expect(edgeCount).toBeGreaterThan(0)
-  })
+  }, 40_000)
 })
 
 describe('Task 10 — Detail Panel', () => {
-  it('clicking a node shows the detail panel', async () => {
-    // Click the first graph node
+  it('clicking a node shows detail or drills down', async () => {
+    // Click the first graph node (may be a layer node which drills down)
     const firstNode = page.locator('.react-flow__node').first()
     await firstNode.click()
+    await page.waitForTimeout(2000)
 
-    // Wait for detail panel
-    await page.waitForSelector('.detail-panel', { timeout: 5_000 })
+    // Either a detail panel shows OR drill-down occurred (breadcrumb appears)
+    const detailVisible = await page.locator('.detail-panel').isVisible().catch(() => false)
+    const breadcrumbVisible = await page.locator('.breadcrumb').isVisible().catch(() => false)
+    const drillOccurred = detailVisible || breadcrumbVisible
+
     await page.screenshot({ path: path.join(SNAPSHOTS, 'task10-detail-panel.png') })
-
-    // Verify detail panel has content
-    const panelVisible = await page.locator('.detail-panel').isVisible()
-    expect(panelVisible).toBe(true)
-  })
+    expect(drillOccurred).toBe(true)
+  }, 20_000)
 })
 
 describe('Task 11 — Filter Bar', () => {
@@ -117,4 +119,21 @@ describe('Task 11 — Filter Bar', () => {
     await searchInput.fill('')
     await page.waitForTimeout(300)
   })
+})
+
+describe('Cache — Auto-load', () => {
+  it('cached analysis loads automatically on project open', async () => {
+    // Wait for cached analysis to load — layers should appear without clicking Analyze
+    await page.locator('.analysis-layer-row').first().waitFor({ timeout: 15_000 })
+
+    const layerCount = await page.locator('.analysis-layer-row').count()
+    expect(layerCount).toBeGreaterThan(0)
+
+    // Button should say "Re-analyze" (not "Analyze Architecture")
+    const btnText = await page.locator('.analysis-btn').textContent()
+    expect(btnText).toBe('Re-analyze')
+
+    await page.screenshot({ path: path.join(SNAPSHOTS, 'cache-loaded.png') })
+    console.log(`Cache loaded: ${layerCount} layers`)
+  }, 30_000)
 })

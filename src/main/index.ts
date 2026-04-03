@@ -28,9 +28,7 @@ const createWindow = () => {
     );
   }
 
-  if (process.env.NODE_ENV !== 'test') {
-    mainWindow.webContents.openDevTools();
-  }
+  // DevTools: only open via keyboard shortcut (Cmd+Alt+I) or menu
 
   // Wire up IPC handlers and spawn the worker process
   setupIPC(mainWindow);

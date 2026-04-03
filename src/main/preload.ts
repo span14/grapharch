@@ -58,4 +58,9 @@ contextBridge.exposeInMainWorld('grapharc', {
     ipcRenderer.on('analysis:complete', handler)
     return () => { ipcRenderer.removeListener('analysis:complete', handler) }
   },
+  onAnalysisCacheLoading: (cb: (data: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: unknown) => cb(data)
+    ipcRenderer.on('analysis:cache-loading', handler)
+    return () => { ipcRenderer.removeListener('analysis:cache-loading', handler) }
+  },
 })

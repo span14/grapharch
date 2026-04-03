@@ -130,9 +130,16 @@ export function writeManifest(
 ): void {
   const dir = cacheDir(rootDir)
   ensureDir(dir)
-  const manifest = {
-    nodes: Object.fromEntries(nodeIds.map((id) => [id, safeId(id)])),
-    edges: Object.fromEntries(edgeIds.map((id) => [id, safeId(id)])),
-  }
-  fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2))
+  const manifestPath = path.join(dir, 'manifest.json')
+
+  // Merge with existing manifest so incremental runs accumulate
+  let existing: { nodes: Record<string, string>; edges: Record<string, string> } = { nodes: {}, edges: {} }
+  try {
+    existing = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))
+  } catch { /* no existing manifest */ }
+
+  for (const id of nodeIds) existing.nodes[id] = safeId(id)
+  for (const id of edgeIds) existing.edges[id] = safeId(id)
+
+  fs.writeFileSync(manifestPath, JSON.stringify(existing, null, 2))
 }

@@ -21,20 +21,22 @@ interface AnalysisState {
   projectAnalysis: ProjectAnalysis | null
   nodeAnalyses: Map<string, NodeAnalysis>
   edgeAnalyses: Map<string, EdgeAnalysis>
-  status: 'idle' | 'running' | 'complete' | 'error'
+  status: 'idle' | 'loading' | 'running' | 'complete' | 'error'
+  cacheProgress: { total: number; done: number } | null
   progress: AnalysisProgress | null
   error: string | null
   selectedModel: string
-  viewLevel: 'layers' | 'modules' | 'functions'
+  viewLevel: 'layers' | 'components'
   selectedLayer: string | null
 
   setProjectAnalysis: (p: ProjectAnalysis) => void
   setNodeAnalysis: (nodeId: string, a: NodeAnalysis) => void
   setEdgeAnalysis: (edgeId: string, a: EdgeAnalysis) => void
+  setCacheProgress: (p: { total: number; done: number }) => void
   setProgress: (p: AnalysisProgress) => void
   setError: (target: string, error: string) => void
   setSelectedModel: (model: string) => void
-  setViewLevel: (level: 'layers' | 'modules' | 'functions') => void
+  setViewLevel: (level: 'layers' | 'components') => void
   selectLayer: (layer: string | null) => void
   startAnalysis: () => void
   completeAnalysis: () => void
@@ -46,6 +48,7 @@ export const useAnalysisStore = create<AnalysisState>((set) => ({
   nodeAnalyses: new Map(),
   edgeAnalyses: new Map(),
   status: 'idle',
+  cacheProgress: null,
   progress: null,
   error: null,
   selectedModel: 'claude-sonnet-4-20250514',
@@ -68,6 +71,11 @@ export const useAnalysisStore = create<AnalysisState>((set) => ({
       return { edgeAnalyses: next }
     }),
 
+  setCacheProgress: (p) => set({
+    cacheProgress: p,
+    status: p.done < p.total ? 'loading' : 'idle',
+  }),
+
   setProgress: (p) => set({ progress: p }),
 
   setError: (_target, error) => set({ error, status: 'error' }),
@@ -88,6 +96,7 @@ export const useAnalysisStore = create<AnalysisState>((set) => ({
       nodeAnalyses: new Map(),
       edgeAnalyses: new Map(),
       status: 'idle',
+      cacheProgress: null,
       progress: null,
       error: null,
       viewLevel: 'layers',

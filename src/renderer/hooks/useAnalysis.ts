@@ -10,6 +10,7 @@ export function useAnalysisIPC(): void {
   const setProjectAnalysis = useAnalysisStore((s) => s.setProjectAnalysis)
   const setNodeAnalysis = useAnalysisStore((s) => s.setNodeAnalysis)
   const setEdgeAnalysis = useAnalysisStore((s) => s.setEdgeAnalysis)
+  const setCacheProgress = useAnalysisStore((s) => s.setCacheProgress)
   const setProgress = useAnalysisStore((s) => s.setProgress)
   const setError = useAnalysisStore((s) => s.setError)
   const completeAnalysis = useAnalysisStore((s) => s.completeAnalysis)
@@ -37,7 +38,10 @@ export function useAnalysisIPC(): void {
       window.grapharc.onAnalysisComplete(() => {
         completeAnalysis()
       }),
+      window.grapharc.onAnalysisCacheLoading((data) => {
+        setCacheProgress(data as { total: number; done: number })
+      }),
     ]
     return () => unsubs.forEach((fn) => fn())
-  }, [setProjectAnalysis, setNodeAnalysis, setEdgeAnalysis, setProgress, setError, completeAnalysis])
+  }, [setProjectAnalysis, setNodeAnalysis, setEdgeAnalysis, setCacheProgress, setProgress, setError, completeAnalysis])
 }

@@ -84,6 +84,70 @@
 .fn-param-type { color: #a78bfa; }
 .fn-card-out { display: flex; align-items: center; gap: 4px; }
 
+/* --- Component Node --- */
+
+.node-component {
+  background: #16213e;
+  border: 1px solid #6366f1;
+  border-radius: 8px;
+  padding: 0;
+  min-width: 280px;
+  max-width: 360px;
+  color: #e0e0e0;
+  cursor: pointer;
+}
+.node-component.node-selected {
+  border-color: #60a5fa !important;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.3);
+}
+.component-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid #2a2a4a;
+  background: rgba(99, 102, 241, 0.1);
+  border-radius: 8px 8px 0 0;
+}
+.component-name { font-weight: 700; font-size: 13px; }
+.component-count { font-size: 10px; opacity: 0.5; }
+.component-desc {
+  padding: 6px 12px;
+  font-size: 11px;
+  opacity: 0.7;
+  line-height: 1.4;
+  border-bottom: 1px solid #2a2a4a;
+}
+.component-code {
+  padding: 8px 12px;
+  max-height: 160px;
+  overflow: hidden;
+}
+.component-code-pre {
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #a5b4fc;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+/* --- Code Preview in Function Nodes --- */
+
+.fn-card-code {
+  padding: 6px 10px;
+  border-top: 1px solid #2a2a4a;
+  max-height: 130px;
+  overflow: hidden;
+}
+.fn-card-code-pre {
+  font-family: 'SF Mono', 'Fira Code', Menlo, monospace;
+  font-size: 10px;
+  line-height: 1.4;
+  color: #94a3b8;
+  white-space: pre;
+  margin: 0;
+  overflow: hidden;
+}
+
 .node-class {
   background: #1e1e3f;
   border-color: #8b5cf6;
@@ -172,6 +236,17 @@
   border: 1px solid #333;
   white-space: nowrap;
 }
+.edge-desc-label {
+  font-size: 10px;
+  color: #93c5fd;
+  background: rgba(26, 26, 46, 0.95);
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid #334155;
+  max-width: 200px;
+  text-align: center;
+  line-height: 1.3;
+}
 
 /* --- Layer Node --- */
 
@@ -180,7 +255,10 @@
   border: 1px solid #333;
   border-radius: 8px;
   padding: 12px 16px;
-  min-width: 200px;
+  min-width: 240px;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
   cursor: pointer;
   transition: border-color 0.2s;
 }
@@ -232,6 +310,59 @@
   background: #2563eb;
 }
 
+/* --- Loading Overlay --- */
+
+.loading-overlay {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1a1a2e;
+}
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+.loading-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #334155;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text {
+  font-size: 14px;
+  color: #94a3b8;
+}
+.loading-progress {
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.loading-bar {
+  width: 100%;
+  height: 4px;
+  background: #1e293b;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.loading-bar-fill {
+  height: 100%;
+  background: #3b82f6;
+  border-radius: 2px;
+  transition: width 0.2s ease;
+}
+.loading-detail {
+  font-size: 11px;
+  color: #64748b;
+}
+
 /* --- React Flow overrides for dark theme --- */
 
 .react-flow__background {
@@ -278,6 +409,22 @@
   overflow-y: auto;
 }
 
+.detail-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+.detail-close:hover { color: #e2e8f0; background: #1e293b; }
+
+.detail-panel { position: relative; }
 .detail-header h3 { margin: 4px 0 12px; font-size: 16px; }
 
 .detail-kind {

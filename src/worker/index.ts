@@ -116,6 +116,14 @@ process.parentPort.on('message', async (e: Electron.MessageEvent) => {
       log(`project:open rootDir=${rootDir}`)
       const cachedResult = await readCache(rootDir)
 
+      // Check if analysis cache exists — signal loading BEFORE sending graph
+      // so the renderer shows loading overlay instead of raw module graph
+      const cachedAnalysis = readAllCachedAnalysis(rootDir)
+      const totalCached = (cachedAnalysis.project ? 1 : 0) + cachedAnalysis.nodes.size + cachedAnalysis.edges.size
+      if (totalCached > 0) {
+        send({ type: 'analysis:cache-loading', data: { total: totalCached, done: 0 } })
+      }
+
       // Send cached graph immediately if available
       if (cachedResult) {
         send({ type: 'graph:ready', data: cachedResult.graph })
@@ -175,15 +183,24 @@ process.parentPort.on('message', async (e: Electron.MessageEvent) => {
       setupWatcher(rootDir)
 
       // Load cached analysis results if available
-      const cachedAnalysis = readAllCachedAnalysis(rootDir)
-      if (cachedAnalysis.project) {
-        send({ type: 'analysis:project', data: cachedAnalysis.project })
-      }
-      for (const [nodeId, analysis] of cachedAnalysis.nodes) {
-        send({ type: 'analysis:node', data: { nodeId, analysis } })
-      }
-      for (const [edgeId, analysis] of cachedAnalysis.edges) {
-        send({ type: 'analysis:edge', data: { edgeId, analysis } })
+      if (totalCached > 0) {
+        let loaded = 0
+
+        if (cachedAnalysis.project) {
+          send({ type: 'analysis:project', data: cachedAnalysis.project })
+          loaded++
+          send({ type: 'analysis:cache-loading', data: { total: totalCached, done: loaded } })
+        }
+        for (const [nodeId, analysis] of cachedAnalysis.nodes) {
+          send({ type: 'analysis:node', data: { nodeId, analysis } })
+          loaded++
+        }
+        send({ type: 'analysis:cache-loading', data: { total: totalCached, done: loaded } })
+        for (const [edgeId, analysis] of cachedAnalysis.edges) {
+          send({ type: 'analysis:edge', data: { edgeId, analysis } })
+          loaded++
+        }
+        send({ type: 'analysis:cache-loading', data: { total: totalCached, done: loaded } })
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message + '\n' + (err as Error).stack : String(err)
@@ -238,7 +255,7 @@ process.parentPort.on('message', async (e: Electron.MessageEvent) => {
       }
     }
 
-    currentAnalysis = new AnalysisPipeline(lastGraph, lastFileSources, send, model, changedFiles)
+    currentAnalysis = new AnalysisPipeline(lastGraph, send, model)
     try {
       await currentAnalysis.run()
     } catch (err: unknown) {
