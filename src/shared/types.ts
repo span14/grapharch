@@ -130,6 +130,39 @@ export interface AnalysisProgress {
   done: number
 }
 
+// --- Component Chat ---
+
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  text: string
+  timestamp: string
+  componentUpdate?: ComponentDefinition
+  edgeUpdates?: ComponentEdge[]
+}
+
+export interface ComponentChatRequest {
+  requestId: string
+  layerName: string
+  componentName: string
+  message: string
+  chatHistory: ChatMessage[]
+  component: ComponentDefinition
+  neighborComponents: ComponentDefinition[]
+  componentEdges: ComponentEdge[]
+  rootDir: string
+  model?: string
+}
+
+export interface ComponentChatResponse {
+  requestId: string
+  layerName: string
+  componentName: string
+  text: string
+  componentUpdate?: ComponentDefinition
+  edgeUpdates?: ComponentEdge[]
+}
+
 // --- IPC Messages ---
 
 export type WorkerMessage =
@@ -146,3 +179,6 @@ export type WorkerMessage =
   | { type: 'analysis:error'; data: { target: string; error: string } }
   | { type: 'analysis:complete' }
   | { type: 'analysis:cache-loading'; data: { total: number; done: number } }
+  // Component chat
+  | { type: 'component:chat-response'; data: ComponentChatResponse }
+  | { type: 'component:chat-error'; data: { requestId: string; error: string } }

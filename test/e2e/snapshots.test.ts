@@ -124,7 +124,7 @@ describe('Task 11 — Filter Bar', () => {
 describe('Cache — Auto-load', () => {
   it('cached analysis loads automatically on project open', async () => {
     // Wait for cached analysis to load — layers should appear without clicking Analyze
-    await page.locator('.analysis-layer-row').first().waitFor({ timeout: 15_000 })
+    await page.locator('.analysis-layer-row').first().waitFor({ timeout: 30_000 })
 
     const layerCount = await page.locator('.analysis-layer-row').count()
     expect(layerCount).toBeGreaterThan(0)

@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react'
 import { useGraphStore } from '../stores/graphStore'
 import {
   useAnalysisStore,
@@ -60,6 +61,134 @@ function LayerDetail({ layerName }: { layerName: string }) {
   )
 }
 
+function ComponentDetail({ layerName, compName }: { layerName: string; compName: string }) {
+  const projectAnalysis = useAnalysisStore((s) => s.projectAnalysis)
+  const chatMessages = useAnalysisStore((s) => s.chatMessages)
+  const chatLoading = useAnalysisStore((s) => s.chatLoading)
+  const addChatMessage = useAnalysisStore((s) => s.addChatMessage)
+  const setChatLoading = useAnalysisStore((s) => s.setChatLoading)
+  const rootDir = useGraphStore((s) => s.graph?.metadata.rootDir)
+  const selectedModel = useAnalysisStore((s) => s.selectedModel)
+  const [chatInput, setChatInput] = useState('')
+  const chatEndRef = useRef<HTMLDivElement>(null)
+
+  const chatKey = `${layerName}:${compName}`
+  const messages = chatMessages.get(chatKey) ?? []
+  const isLoading = chatLoading === chatKey
+
+  // Must be above any conditional return to satisfy rules-of-hooks
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages.length])
+
+  const layer = projectAnalysis?.layers.find((l) => l.name === layerName)
+  const comp = layer?.components?.find((c) => c.name === compName)
+  if (!comp) return null
+
+  const handleSend = () => {
+    if (!chatInput.trim() || isLoading || !rootDir) return
+    const userMsg = {
+      id: crypto.randomUUID(),
+      role: 'user' as const,
+      text: chatInput,
+      timestamp: new Date().toISOString(),
+    }
+    addChatMessage(layerName, compName, userMsg)
+    setChatLoading(chatKey)
+
+    // Strip componentUpdate/edgeUpdates from chat history before sending over IPC
+    const strippedHistory = [...messages, userMsg].slice(-20).map((m) => ({
+      id: m.id,
+      role: m.role,
+      text: m.text,
+      timestamp: m.timestamp,
+    }))
+
+    window.grapharc.sendComponentChat({
+      requestId: crypto.randomUUID(),
+      layerName,
+      componentName: compName,
+      message: chatInput,
+      chatHistory: strippedHistory,
+      component: comp,
+      neighborComponents: (layer?.components ?? []).filter((c) => c.name !== compName),
+      componentEdges: layer?.componentEdges ?? [],
+      rootDir,
+      model: selectedModel,
+    })
+    setChatInput('')
+  }
+
+  return (
+    <div className="detail-panel detail-panel-chat">
+      <CloseButton />
+      <div className="detail-scroll">
+        <div className="detail-header">
+          <span className="detail-kind kind-function">component</span>
+          <h3>{comp.name}</h3>
+        </div>
+        <div className="detail-section">
+          <h4>Description</h4>
+          <p className="detail-summary">{comp.description}</p>
+        </div>
+        <div className="detail-section">
+          <h4>Pseudocode</h4>
+          <pre className="detail-code">{comp.pseudocode}</pre>
+        </div>
+        {comp.output && (
+          <div className="detail-section">
+            <h4>Output</h4>
+            <code className="detail-return-type">{comp.output.type}</code>
+            {comp.output.interpretation && (
+              <p className="detail-reasoning">{comp.output.interpretation}</p>
+            )}
+          </div>
+        )}
+        <div className="detail-section">
+          <h4>Functions ({comp.functions.length})</h4>
+          {comp.functions.map((f) => (
+            <div key={f} style={{ fontSize: 12, padding: '2px 0', opacity: 0.7 }}>{f.split('::').pop()}</div>
+          ))}
+        </div>
+
+        {/* Chat thread */}
+        {messages.length > 0 && (
+          <div className="detail-section">
+            <h4>Chat</h4>
+            <div className="chat-thread">
+              {messages.map((msg) => (
+                <div key={msg.id} className={`chat-message chat-${msg.role}`}>
+                  <div className="chat-message-text">{msg.text}</div>
+                  {msg.componentUpdate && (
+                    <span className="chat-update-badge">Component updated</span>
+                  )}
+                </div>
+              ))}
+              {isLoading && <div className="chat-loading">Thinking...</div>}
+              <div ref={chatEndRef} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Chat input */}
+      <div className="chat-input-container">
+        <input
+          className="chat-input"
+          value={chatInput}
+          onChange={(e) => setChatInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) handleSend() }}
+          placeholder="Ask about this component..."
+          disabled={isLoading}
+        />
+        <button className="chat-send-btn" onClick={handleSend} disabled={isLoading || !chatInput.trim()}>
+          Send
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function CloseButton() {
   const selectNode = useGraphStore((s) => s.selectNode)
   return (
@@ -85,33 +214,7 @@ export function DetailPanel() {
     const parts = selectedNodeId.split(':')
     const layerName = parts[1]
     const compName = parts.slice(2).join(':')
-    const projectAnalysis = useAnalysisStore.getState().projectAnalysis
-    const layer = projectAnalysis?.layers.find((l) => l.name === layerName)
-    const comp = layer?.components?.find((c) => c.name === compName)
-    if (!comp) return null
-    return (
-      <div className="detail-panel">
-        <CloseButton />
-        <div className="detail-header">
-          <span className="detail-kind kind-function">component</span>
-          <h3>{comp.name}</h3>
-        </div>
-        <div className="detail-section">
-          <h4>Description</h4>
-          <p className="detail-summary">{comp.description}</p>
-        </div>
-        <div className="detail-section">
-          <h4>Pseudocode</h4>
-          <pre className="detail-code">{comp.pseudocode}</pre>
-        </div>
-        <div className="detail-section">
-          <h4>Functions ({comp.functions.length})</h4>
-          {comp.functions.map((f) => (
-            <div key={f} style={{ fontSize: 12, padding: '2px 0', opacity: 0.7 }}>{f.split('::').pop()}</div>
-          ))}
-        </div>
-      </div>
-    )
+    return <ComponentDetail layerName={layerName} compName={compName} />
   }
 
   const node = graph.nodes.find((n) => n.id === selectedNodeId)

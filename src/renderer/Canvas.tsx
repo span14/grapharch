@@ -314,6 +314,8 @@ export function Canvas() {
   const selectedLayer = useAnalysisStore((s) => s.selectedLayer)
   const setViewLevel = useAnalysisStore((s) => s.setViewLevel)
   const selectLayerFn = useAnalysisStore((s) => s.selectLayer)
+  const searchQuery = useGraphStore((s) => s.searchQuery)
+  const visibleEdgeKinds = useGraphStore((s) => s.visibleEdgeKinds)
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([] as Node[])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([] as Edge[])
@@ -353,15 +355,37 @@ export function Canvas() {
       flowEdges = result.edges
     }
 
+    // Apply search filter: keep only nodes whose label matches the query
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase()
+      flowNodes = flowNodes.filter((n) => {
+        const label = (n.data as { label?: string }).label ?? ''
+        return label.toLowerCase().includes(q)
+      })
+      const survivingIds = new Set(flowNodes.map((n) => n.id))
+      flowEdges = flowEdges.filter(
+        (e) => survivingIds.has(e.source) && survivingIds.has(e.target),
+      )
+    }
+
+    // Apply edge kind filter (only in module view — layer/component edges are always shown)
+    if (viewLevel !== 'layers' && viewLevel !== 'components') {
+      flowEdges = flowEdges.filter((e) => visibleEdgeKinds.has(e.type ?? ''))
+    }
+
     // Run ELK layout
     computeLayout(flowNodes, flowEdges).then((layouted) => {
       setNodes(layouted)
       setEdges(flowEdges)
       setLayoutVersion((v) => v + 1)
+    }).catch((err) => {
+      console.error('Layout failed:', err)
     })
     // NOTE: selectedNodeId intentionally excluded — selection should not trigger re-layout
+    // NOTE: nodeAnalyses, edgeAnalyses intentionally excluded — they are only used
+    // by graphToFlow (module view fallback), not for layers/components layout
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graph, expandedModules, toggleModule, nodeAnalyses, edgeAnalyses, projectAnalysis, viewLevel, selectedLayer, setViewLevel, selectLayerFn, setNodes, setEdges])
+  }, [graph, expandedModules, toggleModule, projectAnalysis, viewLevel, selectedLayer, setViewLevel, selectLayerFn, setNodes, setEdges, searchQuery, visibleEdgeKinds])
 
   // Auto-fit viewport once nodes are measured after layout
   const lastFitVersion = useRef(0)

@@ -12,6 +12,7 @@ export type LayerNodeData = {
 
 export function LayerNode({ data }: NodeProps<Node<LayerNodeData>>) {
   const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
     if (e.detail === 2) {
       data.onDrillDown()
     } else {

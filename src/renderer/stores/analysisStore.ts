@@ -5,6 +5,9 @@ import type {
   LayerAssignment,
   EdgeAnalysis,
   AnalysisProgress,
+  ChatMessage,
+  ComponentDefinition,
+  ComponentEdge,
 } from '../../shared/types'
 
 export type NodeAnalysis = FunctionAnalysis | LayerAssignment
@@ -29,6 +32,10 @@ interface AnalysisState {
   viewLevel: 'layers' | 'components'
   selectedLayer: string | null
 
+  // Chat
+  chatMessages: Map<string, ChatMessage[]>
+  chatLoading: string | null
+
   setProjectAnalysis: (p: ProjectAnalysis) => void
   setNodeAnalysis: (nodeId: string, a: NodeAnalysis) => void
   setEdgeAnalysis: (edgeId: string, a: EdgeAnalysis) => void
@@ -41,6 +48,11 @@ interface AnalysisState {
   startAnalysis: () => void
   completeAnalysis: () => void
   reset: () => void
+
+  // Chat actions
+  addChatMessage: (layerName: string, compName: string, msg: ChatMessage) => void
+  setChatLoading: (key: string | null) => void
+  updateComponent: (layerName: string, oldName: string, updated: ComponentDefinition, edgeUpdates?: ComponentEdge[]) => void
 }
 
 export const useAnalysisStore = create<AnalysisState>((set) => ({
@@ -54,6 +66,8 @@ export const useAnalysisStore = create<AnalysisState>((set) => ({
   selectedModel: 'claude-sonnet-4-20250514',
   viewLevel: 'layers',
   selectedLayer: null,
+  chatMessages: new Map(),
+  chatLoading: null,
 
   setProjectAnalysis: (p) => set({ projectAnalysis: p, viewLevel: 'layers' }),
 
@@ -101,5 +115,49 @@ export const useAnalysisStore = create<AnalysisState>((set) => ({
       error: null,
       viewLevel: 'layers',
       selectedLayer: null,
+      chatMessages: new Map(),
+      chatLoading: null,
+    }),
+
+  addChatMessage: (layerName, compName, msg) =>
+    set((state) => {
+      const key = `${layerName}:${compName}`
+      const next = new Map(state.chatMessages)
+      let msgs = [...(next.get(key) ?? []), msg]
+      // Cap at 100 messages per component
+      if (msgs.length > 100) {
+        msgs = msgs.slice(-100)
+      }
+      // Strip componentUpdate and edgeUpdates from messages older than the last 5
+      if (msgs.length > 5) {
+        msgs = msgs.map((m, i) => {
+          if (i < msgs.length - 5 && (m.componentUpdate || m.edgeUpdates)) {
+            const { componentUpdate, edgeUpdates, ...rest } = m
+            return rest as ChatMessage
+          }
+          return m
+        })
+      }
+      next.set(key, msgs)
+      return { chatMessages: next }
+    }),
+
+  setChatLoading: (key) => set({ chatLoading: key }),
+
+  updateComponent: (layerName, oldName, updated, edgeUpdates) =>
+    set((state) => {
+      if (!state.projectAnalysis) return state
+      const layers = state.projectAnalysis.layers.map((l) => {
+        if (l.name !== layerName) return l
+        const components = (l.components ?? []).map((c) =>
+          c.name === oldName ? updated : c
+        )
+        return {
+          ...l,
+          components,
+          componentEdges: edgeUpdates ?? l.componentEdges,
+        }
+      })
+      return { projectAnalysis: { ...state.projectAnalysis, layers } }
     }),
 }))

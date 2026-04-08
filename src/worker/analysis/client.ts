@@ -2,10 +2,63 @@ import { spawn } from 'node:child_process'
 
 const DEFAULT_MODEL = 'claude-sonnet-4-20250514'
 const MAX_RETRIES = 2
+const SESSION_EXPIRY_MS = 30 * 60 * 1000 // 30 minutes
 
 export interface ClaudeCall {
   promise: Promise<string>
   abort: () => void
+}
+
+// ── Session management ─────────────────────────────────────────
+
+interface SessionEntry {
+  sessionId: string
+  expiresAt: number
+}
+
+const sessions = new Map<string, SessionEntry>()
+
+export function clearSessions(): void {
+  sessions.clear()
+}
+
+export function deleteSession(key: string): void {
+  sessions.delete(key)
+}
+
+export function getSession(key: string): string | null {
+  const entry = sessions.get(key)
+  if (!entry) return null
+  if (Date.now() > entry.expiresAt) {
+    sessions.delete(key)
+    return null
+  }
+  return entry.sessionId
+}
+
+function pruneExpiredSessions(): void {
+  const now = Date.now()
+  for (const [key, entry] of sessions) {
+    if (now > entry.expiresAt) {
+      sessions.delete(key)
+    }
+  }
+}
+
+export function setSession(key: string, sessionId: string): void {
+  if (sessions.size > 50) {
+    pruneExpiredSessions()
+  }
+  sessions.set(key, { sessionId, expiresAt: Date.now() + SESSION_EXPIRY_MS })
+}
+
+function extractSessionId(stdout: string): string | null {
+  try {
+    const result = JSON.parse(stdout)
+    return result.session_id ?? null
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -63,7 +116,13 @@ function spawnClaude(
 
 /**
  * Extract the text result from Claude CLI JSON output.
+ * Returns { text, sessionId }.
  */
+function extractResultWithSession(stdout: string): { text: string; sessionId: string | null } {
+  const sessionId = extractSessionId(stdout)
+  return { text: extractResult(stdout), sessionId }
+}
+
 function extractResult(stdout: string): string {
   try {
     const result = JSON.parse(stdout)
@@ -160,6 +219,54 @@ export function callClaude(
  * Parse a JSON response from Claude, handling markdown code fences
  * and any surrounding text.
  */
+/**
+ * Call Claude with session persistence for chat.
+ * Resumes an existing session if available and not expired.
+ * Returns the text result and stores the session ID for future calls.
+ */
+export function callClaudeChat(
+  sessionKey: string,
+  systemPrompt: string,
+  userPrompt: string,
+  model?: string
+): ClaudeCall {
+  const selectedModel = model ?? DEFAULT_MODEL
+  const existingSession = getSession(sessionKey)
+  let currentSpawn: { kill: () => void } | null = null
+
+  const promise = (async () => {
+    const args: string[] = existingSession
+      ? [
+          '-p', '-',
+          '--model', selectedModel,
+          '--output-format', 'json',
+          '--append-system-prompt', systemPrompt,
+          '--resume', existingSession,
+        ]
+      : [
+          '-p', '-',
+          '--model', selectedModel,
+          '--output-format', 'json',
+          '--append-system-prompt', systemPrompt,
+        ]
+
+    const call = spawnClaude(args, userPrompt)
+    currentSpawn = call
+    const { stdout } = await call.promise
+    currentSpawn = null
+
+    const { text, sessionId } = extractResultWithSession(stdout)
+    if (sessionId) setSession(sessionKey, sessionId)
+
+    return text
+  })()
+
+  return {
+    promise,
+    abort: () => { currentSpawn?.kill() },
+  }
+}
+
 export function parseJsonResponse<T>(text: string): T {
   let cleaned = text.trim()
 

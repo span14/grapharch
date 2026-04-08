@@ -19,7 +19,28 @@ function ensureDir(dir: string): void {
 }
 
 function safeId(id: string): string {
-  return crypto.createHash('sha256').update(id).digest('hex').slice(0, 16)
+  return crypto.createHash('sha256').update(id).digest('hex').slice(0, 32)
+}
+
+// ── Write lock (prevents race conditions on project.json) ─────
+
+const writeLocks = new Map<string, Promise<void>>()
+
+export async function withCacheLock<T>(rootDir: string, fn: () => T): Promise<T> {
+  const prev = writeLocks.get(rootDir) ?? Promise.resolve()
+  let resolve: () => void
+  const next = new Promise<void>(r => { resolve = r })
+  writeLocks.set(rootDir, next)
+  await prev
+  try {
+    return fn()
+  } finally {
+    resolve!()
+    // Clean up the map entry if this is still the latest lock
+    if (writeLocks.get(rootDir) === next) {
+      writeLocks.delete(rootDir)
+    }
+  }
 }
 
 // ── Project analysis ───────────────────────────────────────────
@@ -121,6 +142,37 @@ export function readAllCachedAnalysis(rootDir: string): {
   }
 
   return { project, nodes, edges }
+}
+
+// ── Component update helper ───────────────────────────────────
+
+export function applyComponentUpdate(
+  rootDir: string,
+  layerName: string,
+  oldComponentName: string,
+  newComponent: { name: string; pseudocode: string; description: string; functions: string[]; output?: unknown },
+  edgeUpdates?: Array<{ source: string; target: string; dataFormat: string; description: string }>
+): ProjectAnalysis | null {
+  const cached = readProjectAnalysis(rootDir)
+  if (!cached) return null
+
+  const analysis = cached.analysis
+  const layer = analysis.layers.find((l) => l.name === layerName)
+  if (!layer || !layer.components) return null
+
+  const idx = layer.components.findIndex((c) => c.name === oldComponentName)
+  if (idx >= 0) {
+    layer.components[idx] = newComponent as any
+  } else {
+    layer.components.push(newComponent as any)
+  }
+
+  if (edgeUpdates) {
+    layer.componentEdges = edgeUpdates
+  }
+
+  writeProjectAnalysis(rootDir, analysis, cached.commitHash)
+  return analysis
 }
 
 export function writeManifest(

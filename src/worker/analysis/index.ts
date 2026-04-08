@@ -48,6 +48,8 @@ export class AnalysisPipeline {
   private cancelled = false
   private currentCall: { abort: () => void } | null = null
 
+  get isCancelled(): boolean { return this.cancelled }
+
   private analyzedNodeIds: string[] = []
 
   constructor(
@@ -77,8 +79,6 @@ export class AnalysisPipeline {
     this.send({ type: 'analysis:project', data: project })
     writeProjectAnalysis(rootDir, project, getHeadCommit(rootDir))
     this.flushManifest()
-
-    this.send({ type: 'analysis:complete' })
   }
 
   cancel(): void {

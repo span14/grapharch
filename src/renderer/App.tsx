@@ -1,3 +1,4 @@
+import { Component, type ReactNode } from 'react'
 import { useGraphIPC } from './hooks/useGraph'
 import { useAnalysisIPC } from './hooks/useAnalysis'
 import { useGraphStore } from './stores/graphStore'
@@ -8,6 +9,37 @@ import { DetailPanel } from './panels/DetailPanel'
 import { FilterBar } from './panels/FilterBar'
 import { AnalysisPanel } from './panels/AnalysisPanel'
 import './styles.css'
+
+class ErrorBoundary extends Component<
+  { children: ReactNode },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null }
+
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 24, color: '#ef4444' }}>
+          <h2>Something went wrong</h2>
+          <pre style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>
+            {this.state.error.message}
+          </pre>
+          <button
+            onClick={() => window.location.reload()}
+            style={{ marginTop: 12 }}
+          >
+            Reload
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 function LoadingOverlay() {
   const cacheProgress = useAnalysisStore((s) => s.cacheProgress)
@@ -74,12 +106,16 @@ function App() {
       <div className="main-area">
         <FilterBar />
         <div className="canvas-container">
-          <ReactFlowProvider>
-            <Canvas />
-          </ReactFlowProvider>
+          <ErrorBoundary>
+            <ReactFlowProvider>
+              <Canvas />
+            </ReactFlowProvider>
+          </ErrorBoundary>
         </div>
       </div>
-      <DetailPanel />
+      <ErrorBoundary>
+        <DetailPanel />
+      </ErrorBoundary>
     </div>
   )
 }

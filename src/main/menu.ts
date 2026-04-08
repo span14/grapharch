@@ -6,8 +6,10 @@ import { Menu, BrowserWindow, dialog } from 'electron'
  * The menu includes:
  * - File > Open Project Folder... (triggers the folder dialog via IPC)
  * - View > Reload / Toggle DevTools
+ *
+ * @param worker - The worker utility process, needed to forward open-folder events
  */
-export function createMenu(mainWindow: BrowserWindow): void {
+export function createMenu(mainWindow: BrowserWindow, worker?: Electron.UtilityProcess | null): void {
   const template: Electron.MenuItemConstructorOptions[] = [
     {
       label: 'File',
@@ -21,7 +23,7 @@ export function createMenu(mainWindow: BrowserWindow): void {
               title: 'Open Project Folder',
             })
             if (!result.canceled && result.filePaths.length > 0) {
-              mainWindow.webContents.send('menu:open-folder', result.filePaths[0])
+              worker?.postMessage({ type: 'project:open', data: { rootDir: result.filePaths[0] } })
             }
           },
         },

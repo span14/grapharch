@@ -1,4 +1,5 @@
 import type { GraphNode, GraphEdge } from '../../shared/types'
+import { getNodeSource } from './sourceCollector'
 
 // ── System prompts ──────────────────────────────────────────────
 
@@ -39,6 +40,54 @@ Rules:
 - CRITICAL: The component output.type and the componentEdge dataFormat for that component MUST be the exact same type string. If a component outputs "List[dict]", its output.type must be "List[dict]" and any edge from it must use "List[dict]" as dataFormat — not "dict" or any variation
 - Component edges describe data that flows between components with concrete types
 - Output ONLY valid JSON, no markdown fences, no commentary`
+
+export const COMPONENT_CHAT_SYSTEM = `You are a senior software architect helping a developer understand and refine component definitions in their project architecture.
+You have access to tools: Read files, Grep for patterns, Glob to find files.
+The user may ask questions about a component, request changes (rename, edit pseudocode, split, merge, move functions), or give feedback.
+
+Rules:
+- If the user asks a question, answer clearly using the component context. Read source files if needed.
+- If the user requests changes, include a "componentUpdate" field with the COMPLETE updated ComponentDefinition
+- If changes affect edges, include "edgeUpdates" with the COMPLETE edge list for this layer
+- componentUpdate must be a full object, not a partial diff
+- For component output.type: include interpretation and codeReference for non-builtin types
+- Output ONLY valid JSON, no markdown fences, no commentary`
+
+export function buildComponentChatPrompt(
+  request: { rootDir: string; layerName: string; componentName: string; component: unknown; neighborComponents: unknown[]; componentEdges: unknown[]; chatHistory: Array<{ role: string; text: string }>; message: string }
+): string {
+  const historyStr = request.chatHistory
+    .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.text}`)
+    .join('\n\n')
+
+  return `## Project Root
+${request.rootDir}
+
+## Layer: ${request.layerName}
+
+## Current Component: ${request.componentName}
+${JSON.stringify(request.component, null, 2)}
+
+## Sibling Components
+${request.neighborComponents.map((c: any) => `- ${c.name}: ${c.description}`).join('\n') || '(none)'}
+
+## Component Edges
+${JSON.stringify(request.componentEdges, null, 2)}
+
+## Conversation History
+${historyStr || '(none)'}
+
+## User Message
+${request.message}
+
+## Required Output Format
+{
+  "text": "Your conversational response",
+  "componentUpdate": null,
+  "edgeUpdates": null
+}
+If changes are requested, replace null with the full updated objects.`
+}
 
 // ── Kept for future on-demand use ──────────────────────────────
 
@@ -234,9 +283,8 @@ export function buildFunctionPrompt(
   fileSources: Map<string, string>,
   layerName?: string
 ): string {
-  const { getNodeSource: getSrc } = require('./sourceCollector')
   const functions = nodes.map((n) => {
-    const source = getSrc(n, fileSources)
+    const source = getNodeSource(n, fileSources)
     const callers = allEdges
       .filter((e) => e.target === n.id && e.kind === 'call')
       .map((e) => e.source)
@@ -257,10 +305,9 @@ export function buildEdgePrompt(
   fileSources: Map<string, string>,
   layerMap?: Map<string, string>
 ): string {
-  const { getNodeSource: getSrc } = require('./sourceCollector')
   const edgeDescriptions = edges.map(({ edge, sourceNode, targetNode }) => {
-    const srcSource = getSrc(sourceNode, fileSources)
-    const tgtSource = getSrc(targetNode, fileSources)
+    const srcSource = getNodeSource(sourceNode, fileSources)
+    const tgtSource = getNodeSource(targetNode, fileSources)
     const srcLayer = layerMap?.get(sourceNode.filePath) ?? 'unknown'
     const tgtLayer = layerMap?.get(targetNode.filePath) ?? 'unknown'
 

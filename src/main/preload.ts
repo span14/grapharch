@@ -63,4 +63,18 @@ contextBridge.exposeInMainWorld('grapharc', {
     ipcRenderer.on('analysis:cache-loading', handler)
     return () => { ipcRenderer.removeListener('analysis:cache-loading', handler) }
   },
+
+  // Component chat & edit
+  sendComponentChat: (request: unknown) => ipcRenderer.invoke('component:chat', request),
+  editComponent: (request: unknown) => ipcRenderer.invoke('component:edit', request),
+  onComponentChatResponse: (cb: (data: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: unknown) => cb(data)
+    ipcRenderer.on('component:chat-response', handler)
+    return () => { ipcRenderer.removeListener('component:chat-response', handler) }
+  },
+  onComponentChatError: (cb: (data: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: unknown) => cb(data)
+    ipcRenderer.on('component:chat-error', handler)
+    return () => { ipcRenderer.removeListener('component:chat-error', handler) }
+  },
 })
